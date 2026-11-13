@@ -17,11 +17,11 @@ It replaces this macro, which you would otherwise edit for every quest:
 - Targets a quest mob if you have no live target.
 - Pings and names each mob once, so you can press the key as often as you like.
 
-A bouncing arrow sits over the nameplate of the mob the next press will ping.
+A bouncing arrow sits over the nameplate of the mob the next press will ping. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
 
 ## Guide arrow
 
-When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one spawns, with its name and distance. Walk where it points. Once a needed mob's nameplate comes up, the bouncing arrow over it takes over. The guide arrow needs Polestar or Questie, since their quest databases know where mobs spawn. It hides in instances.
+When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one spawns, with its name and distance. Walk where it points. Once a needed mob's nameplate comes up, the bouncing arrow over it takes over. If you reach a spawn and none of its mobs are alive, the arrow skips that spawn for 5 minutes and points at the next one. The guide arrow needs Polestar or Questie, since their quest databases know where mobs spawn. It hides in instances.
 
 ## Mobs it finds
 
@@ -46,6 +46,7 @@ The settings are in Options > AddOns > QuestPing. You can:
 - turn party chat on or off
 - pick the raid icon
 - turn the nameplate arrow on or off
+- turn the quest icons on or off
 - turn the guide arrow on or off
 - turn the quest databases on or off
 - turn enemy nameplates on or off

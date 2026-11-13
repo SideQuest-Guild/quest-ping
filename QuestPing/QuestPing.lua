@@ -99,24 +99,62 @@ local function quietUnits(units)
     return quiet
 end
 
-local function pointArrowAt(unit)
-    local plate
-    if unit and QuestPingDB.arrow ~= false and C_NamePlate.GetNamePlateForUnit then
-        local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, unit)
-        plate = ok and type(p) == "table" and p or nil
+local function plateOf(unit)
+    if not C_NamePlate.GetNamePlateForUnit then
+        return nil
     end
+    local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+    return ok and type(p) == "table" and p or nil
+end
+
+-- Parents f to a nameplate (re-anchoring only when it's a different one) and shows it, or hides it.
+local function attach(f, plate, point, relPoint, x, y)
     if not plate then
-        arrow:Hide()
-        arrow.plate = nil
+        f:Hide()
+        f.plate = nil
         return
     end
-    if arrow.plate ~= plate then
-        arrow:SetParent(plate)
-        arrow:ClearAllPoints()
-        arrow:SetPoint("BOTTOM", plate, "TOP", 0, 4)
-        arrow.plate = plate
+    if f.plate ~= plate then
+        f:SetParent(plate)
+        f:ClearAllPoints()
+        f:SetPoint(point, plate, relPoint, x, y)
+        f.plate = plate
     end
-    arrow:Show()
+    f:Show()
+end
+
+local function pointArrowAt(unit)
+    attach(arrow, unit and QuestPingDB.arrow ~= false and plateOf(unit) or nil, "BOTTOM", "TOP", 0, 4)
+end
+
+local marks = {} -- quest icons on nameplates, reused
+
+local function newMark()
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetSize(20, 20)
+    local tex = f:CreateTexture(nil, "OVERLAY")
+    tex:SetAllPoints(f)
+    tex:SetAtlas("QuestObjective")
+    return f
+end
+
+-- A quest icon beside the nameplate of every needed mob nobody has: not tapped (candidates never are) and not
+-- in a fight. Pinged ones keep theirs; they're still free to take.
+local function markFree(units)
+    local n = 0
+    if QuestPingDB.marks ~= false then
+        for _, unit in ipairs(units) do
+            local plate = QP.Fresh(unit) and plateOf(unit)
+            if plate then
+                n = n + 1
+                marks[n] = marks[n] or newMark()
+                attach(marks[n], plate, "RIGHT", "LEFT", 0, 0)
+            end
+        end
+    end
+    for i = n + 1, #marks do
+        attach(marks[i], nil)
+    end
 end
 
 local function applySteps(steps)
@@ -173,6 +211,7 @@ local function refresh()
     button.Icon:SetDesaturated(nextUnit == nil)
     button:SetAlpha(#units > 0 and 1 or 0.5)
     pointArrowAt(nextUnit)
+    markFree(units)
     ns.state.hunt, ns.state.shown = hunt, shown
     for _, fn in ipairs(ns.listeners) do
         fn()

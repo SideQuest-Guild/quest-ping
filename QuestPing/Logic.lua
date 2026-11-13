@@ -116,11 +116,12 @@ function QP.SpawnPoints(questID, index)
     return nil
 end
 
---- The nearest point on the player's continent, and its distance in yards; nil when none is.
-function QP.Nearest(points, continent, px, py)
+--- The nearest point on the player's continent, and its distance in yards; nil when none is. Points that are
+-- keys of skip (spawns found empty, see QP.MarkSeen) are passed over.
+function QP.Nearest(points, continent, px, py, skip)
     local best, bestSq
     for _, p in ipairs(points) do
-        if p.continent == continent then
+        if p.continent == continent and not (skip and skip[p]) then
             local dx, dy = p.x - px, p.y - py
             local sq = dx * dx + dy * dy
             if not bestSq or sq < bestSq then
@@ -129,6 +130,20 @@ function QP.Nearest(points, continent, px, py)
         end
     end
     return best, best and math.sqrt(bestSq) or nil
+end
+
+--- Puts every point within range yards of the player in seen, at time now: the player has been there and no
+-- mob it's for was in view, so the spawn is empty (killed, or taken by someone else) until it respawns.
+function QP.MarkSeen(points, continent, px, py, range, seen, now)
+    local rangeSq = range * range
+    for _, p in ipairs(points) do
+        if p.continent == continent then
+            local dx, dy = p.x - px, p.y - py
+            if dx * dx + dy * dy <= rangeSq then
+                seen[p] = now
+            end
+        end
+    end
 end
 
 --- The turn from where the player faces to the point, in radians counterclockwise, for Texture:SetRotation on

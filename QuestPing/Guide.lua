@@ -3,38 +3,57 @@
 -- the nearest place one spawns (Polestar's or Questie's database), with its name and distance. It steps aside
 -- once a needed mob's nameplate is up (the bouncing arrow over the nameplate takes over), in instances, and
 -- where the game gives no position or facing. Shift-drag moves it; Options > AddOns > QuestPing turns it off.
+--
+-- A spawn you've been to with none of its mobs alive in view (you killed them, or someone else has them) is
+-- empty, so the arrow skips it until it respawns and points at the next one instead.
 
 local _, ns = ...
 local QP = ns.QP
 local readable = QP.Readable
 
 local ARROW = "Interface\\AddOns\\QuestPing\\Media\\arrow"
-local TURN_EVERY = 0.05 -- seconds between arrow turns
+local POS_EVERY = 0.1 -- seconds between reading the player's position; the arrow follows facing every frame
 local PICK_EVERY = 1 -- seconds between choosing the nearest spawn
-local CLOSE = 30 -- yards: close enough that its nameplate should be up
+local SEEN_RANGE = 40 -- yards: a spawn this close shows its mobs' nameplates (the game draws them to 45)
+local RESPAWN = 300 -- seconds an empty spawn is skipped
 
 local guide
 local target -- { name, continent, x, y }
-local sinceTurn, sincePick = 0, PICK_EVERY
+local pos = {} -- the player's continent, x, y as of the last read
+local seen = {} -- spawn point -> GetTime() it was found empty
+local sincePos, sincePick = POS_EVERY, PICK_EVERY
+local shownYards
 
+-- Any mob you still need in view, even one already pinged or in a fight: you're where the arrow would lead.
 local function anyInView()
-    for _, s in ipairs(ns.state.shown) do
-        if not s.quiet then
-            return true
-        end
-    end
-    return false
+    return #ns.state.shown > 0
 end
 
--- The nearest spawn of any mob an unfinished objective still needs, with its distance.
+local function showDistance(yards)
+    yards = math.floor(yards)
+    if yards ~= shownYards then
+        shownYards = yards
+        guide.Text:SetText(("%s  |cffffffff%d yd|r"):format(target.name or "", yards))
+    end
+end
+
+-- The nearest spawn not found empty of any mob an unfinished objective still needs, with its distance. Only
+-- runs with no needed mob in view, so the spawns around the player are empty.
 local function pick(continent, px, py)
+    local now = GetTime()
+    for p, at in pairs(seen) do
+        if now - at > RESPAWN then
+            seen[p] = nil
+        end
+    end
     local best, bestDist
     for _, quest in ipairs(ns.state.hunt) do
         for _, o in ipairs(quest.objectives) do
             if not o.finished then
                 local points = QP.SpawnPoints(quest.questID, o.index)
                 if points then
-                    local p, dist = QP.Nearest(points, continent, px, py)
+                    QP.MarkSeen(points, continent, px, py, SEEN_RANGE, seen, now)
+                    local p, dist = QP.Nearest(points, continent, px, py, seen)
                     if p and (not bestDist or dist < bestDist) then
                         best, bestDist = p, dist
                     end
@@ -55,30 +74,37 @@ local function choose()
     if QuestPingDB.guide == false or (IsInInstance and IsInInstance()) or anyInView() then
         return hide()
     end
-    local continent, px, py = ns.PlayerWorldPosition()
-    if not continent then
+    if not pos.continent then
         return hide()
     end
-    local p, dist = pick(continent, px, py)
-    if not p or dist < CLOSE then
+    local p, dist = pick(pos.continent, pos.x, pos.y)
+    if not p then
         return hide()
     end
-    target = p
-    guide.Text:SetText(("%s  |cffffffff%d yd|r"):format(p.name or "", math.floor(dist)))
+    if p ~= target then
+        target, shownYards = p, nil
+    end
+    showDistance(dist)
     guide:Show()
 end
 
-local function turn()
-    if not target then
-        return
+-- Every POS_EVERY: where the player is, and the distance under the arrow.
+local function readPosition()
+    pos.continent, pos.x, pos.y = ns.PlayerWorldPosition()
+    if target and pos.continent == target.continent then
+        local dx, dy = target.x - pos.x, target.y - pos.y
+        showDistance(math.sqrt(dx * dx + dy * dy))
     end
+end
+
+-- Every frame while there's a target: point the arrow, so it turns as smoothly as the camera does.
+local function turn()
     local facing = readable(GetPlayerFacing and GetPlayerFacing())
-    local continent, px, py = ns.PlayerWorldPosition()
-    if not (facing and continent == target.continent) then
+    if not (facing and pos.continent == target.continent) then
         guide.Arrow:Hide()
         return
     end
-    guide.Arrow:SetRotation(QP.Bearing(px, py, target.x, target.y, facing))
+    guide.Arrow:SetRotation(QP.Bearing(pos.x, pos.y, target.x, target.y, facing))
     guide.Arrow:Show()
 end
 
@@ -133,8 +159,11 @@ end
 --- Choose again now: a setting changed (Options.lua).
 function ns.UpdateGuide()
     if guide then
+        readPosition()
         choose()
-        turn()
+        if target then
+            turn()
+        end
     end
 end
 
@@ -151,13 +180,16 @@ clock:SetScript("OnUpdate", function(_, elapsed)
     if not guide then
         return
     end
-    sincePick, sinceTurn = sincePick + elapsed, sinceTurn + elapsed
+    sincePos, sincePick = sincePos + elapsed, sincePick + elapsed
+    if sincePos >= POS_EVERY then
+        sincePos = 0
+        readPosition()
+    end
     if sincePick >= PICK_EVERY then
         sincePick = 0
         choose()
     end
-    if sinceTurn >= TURN_EVERY then
-        sinceTurn = 0
+    if target then
         turn()
     end
 end)

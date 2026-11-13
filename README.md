@@ -20,14 +20,17 @@ It replaces a macro like this, without editing it for every quest:
 - **Targets** the first quest mob in view if you have no live target, or if you're targeting something that isn't
   one. In a fight it never pulls you off a live target.
 - Once every mob in view is pinged, presses only target, so spamming is safe.
-- A **bouncing arrow** sits over the nameplate of the mob the next press will ping.
+- A **bouncing arrow** sits over the nameplate of the mob the next press will ping, and a **quest icon** sits
+  beside every needed mob nobody has (not tapped, not in a fight).
 
 ## Guide arrow
 
 When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one
 spawns, with its name and distance. Walk where it points; once a needed mob's nameplate comes up, the bouncing
 arrow over it takes over. The spawn places come from Polestar's or Questie's quest database, so the guide arrow
-needs one of them. It hides in instances. Shift-drag moves it.
+needs one of them. A spawn you reach with none of its mobs alive in view (you killed them, or someone else has
+them) is skipped for 5 minutes while it respawns, so the arrow moves on to the next one. It hides in instances.
+Shift-drag moves it.
 
 ## Which mobs
 
@@ -54,8 +57,9 @@ needs one of them. It hides in instances. Shift-drag moves it.
   Attune's: the quests you're hunting on the left with how many of their mobs are near, and the picked quest on
   the right with a progress bar, each objective, which mobs count for it and how many are near.
 - **Settings** are under **Options > AddOns > QuestPing** (or the window's Settings button, or
-  `/questping options`): party chat on or off, which raid icon goes in front, the nameplate arrow, the guide
-  arrow, using quest databases, enemy nameplates, the minimap button, and putting things back where they start.
+  `/questping options`): party chat on or off, which raid icon goes in front, the nameplate arrow, the quest
+  icons, the guide arrow, using quest databases, enemy nameplates, the ping button, the minimap button, and
+  putting things back where they start.
 - `/questping status` prints what you're hunting and what's near in chat.
 
 ## In combat

@@ -130,10 +130,11 @@ test("Polestar's database adds droppers and group members, only while loaded and
 end)
 
 -- A Questie that has started, with one quest: objective 1 kills npc 100, objective 2 is any of npcs 101 and 102
--- (kill credit), objective 3 collects item 500 dropped by npc 103. Npc 100 spawns at 50,60 on area 10 (uiMap 1).
+-- (kill credit), objective 3 collects item 500 dropped by npc 103. Npc 100 spawns at 50,60 and 50,30 on area 10
+-- (uiMap 1).
 local function fakeQuestie()
     local npcs = {
-        [100] = { name = "Skullsplitter Mystic", spawns = { [10] = { { 50, 60 } } } },
+        [100] = { name = "Skullsplitter Mystic", spawns = { [10] = { { 50, 60 }, { 50, 30 } } } },
         [101] = { name = "Riverpaw Brute" }, [102] = { name = "Riverpaw Mongrel" }, [103] = { name = "Gnoll Pup" },
     }
     local modules = {
@@ -177,7 +178,7 @@ test("Questie's database names the mobs by the quest log's objective index, and 
     eq(wanted["Riverpaw Mongrel"], true, "kill credit mobs")
     eq(wanted["Gnoll Pup"], true, "item droppers")
     local points = QP.SpawnPoints(1, 1)
-    eq(#points, 1)
+    eq(#points, 2)
     eq(points[1].continent, 1)
     eq(points[1].x, 500)
     eq(points[1].y, 600)
@@ -192,6 +193,12 @@ test("the nearest spawn is on the player's continent, and the bearing turns the 
     eq(p.name, "here")
     eq(dist, 30)
     eq(QP.Nearest({ elsewhere }, 1, 0, 0), nil)
+    local seen = {}
+    QP.MarkSeen({ far, elsewhere, here }, 1, 0, 25, 40, seen, 7)
+    eq(seen[here], 7, "5 yards away: been there")
+    eq(seen[far], nil, "65 yards away")
+    eq(seen[elsewhere], nil, "1 yard away, but on another continent")
+    eq(QP.Nearest({ far, here }, 1, 0, 0, seen), far, "an emptied spawn is skipped")
     local function near(a, b) return math.abs(a - b) < 1e-9 end
     assert(near(QP.Bearing(0, 0, 10, 0, 0), 0), "due north while facing north: straight ahead")
     assert(near(QP.Bearing(0, 0, 0, 10, 0), math.pi / 2), "due west while facing north: to the left")
@@ -465,6 +472,19 @@ test("the guide arrow points at the nearest spawn until a needed mob is in view"
     assert(g.Text.text:find("Skullsplitter Mystic", 1, true) and g.Text.text:find("100 yd", 1, true), g.Text.text)
     assert(math.abs(g.Arrow.rotation - math.pi / 2) < 1e-9, "spawn is due west: arrow turns left")
 
+    world.py = 0.55
+    guideClock.scripts.OnUpdate(guideClock, 0.1)
+    assert(g.Text.text:find("50 yd", 1, true), "the distance follows the player between picks: " .. g.Text.text)
+
+    world.py = 0.59
+    guideClock.scripts.OnUpdate(guideClock, 1)
+    assert(g.Text.text:find("290 yd", 1, true), "an empty spawn sends it to the next: " .. g.Text.text)
+    assert(math.abs(math.abs(g.Arrow.rotation) - math.pi / 2) < 1e-9, "the other spawn is due east")
+    world.py = 0.5
+    world.now = world.now + 301
+    guideClock.scripts.OnUpdate(guideClock, 1)
+    assert(g.Text.text:find("100 yd", 1, true), "back once it has respawned: " .. g.Text.text)
+
     near("nameplate20", { name = "Skullsplitter Mystic" })
     guideClock.scripts.OnUpdate(guideClock, 1)
     eq(g.shown, false, "the nameplate arrow takes over")
@@ -475,6 +495,31 @@ test("the guide arrow points at the nearest spawn until a needed mob is in view"
     eq(g.shown, false, "switched off")
     QuestPingDB.guide = nil
     Questie, QuestieLoader = nil, nil
+end)
+
+test("free quest mobs get a quest icon on their nameplate; ones in a fight don't", function()
+    clearPlates()
+    near("nameplate21", { name = "Skullsplitter Mystic" })
+    near("nameplate22", { name = "Skullsplitter Mystic", fighting = true })
+    local function marked()
+        local list = {}
+        for _, f in ipairs(created) do
+            local plate = rawget(f, "plate")
+            if f ~= arrow and plate and f.shown then
+                list[#list + 1] = plate.unit
+            end
+        end
+        table.sort(list)
+        return table.concat(list, ",")
+    end
+    eq(marked(), "nameplate21")
+    QuestPingDB.marks = false
+    ns.Refresh()
+    eq(marked(), "", "switched off")
+    QuestPingDB.marks = nil
+    clearPlates()
+    ns.Refresh()
+    eq(marked(), "", "gone with the plates")
 end)
 
 test("finishing the objective hides the button", function()

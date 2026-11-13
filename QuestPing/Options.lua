@@ -75,6 +75,9 @@ local function register()
     end, "The raid icon in front of the party chat line. Everyone in the group sees it.")
     checkbox("arrow", "Arrow over the next mob", true,
         "A bouncing arrow over the nameplate of the mob the next press will ping.")
+    checkbox("marks", "Mark free quest mobs", true,
+        "A quest icon beside the nameplate of every mob you still need that nobody has: not tapped by someone "
+            .. "else and not in a fight.")
     checkbox("guide", "Guide arrow", true,
         "When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one "
             .. "spawns, with its distance. Needs Polestar's or Questie's quest database. Shift-drag to move it.")
