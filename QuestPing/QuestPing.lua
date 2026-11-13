@@ -36,6 +36,19 @@ local hunt, wanted, wantedDirty, ticks = {}, {}, true, 0
 local pingedAt = {} -- GUID (or "plate:<unit>" when the GUID is secret) -> GetTime() of its ping
 local pingByText = {} -- step macro -> the unit it pings
 local stepCount = 0
+local candidates = {} -- the units the steps were last worked out for
+
+-- The tooltip check (QP.TooltipNeeds) per nameplate, kept a moment: reading a tooltip every tick is wasteful.
+local TOOLTIP_FOR = 1 -- seconds
+local tooltipAt, tooltipSays = {}, {}
+
+local function partyNeeds(unit)
+    local now = GetTime()
+    if not tooltipAt[unit] or now - tooltipAt[unit] > TOOLTIP_FOR then
+        tooltipAt[unit], tooltipSays[unit] = now, QP.TooltipNeeds(unit)
+    end
+    return tooltipSays[unit]
+end
 local appliedSig -- the units and pings the steps were written for
 local shown = {} -- { name, quiet } per candidate, for the tooltip and the window
 local button, arrow, secured
@@ -66,21 +79,31 @@ local function removePlate(unit)
         end
     end
     pingedAt["plate:" .. unit] = nil
+    tooltipAt[unit] = nil -- the token now belongs to another mob
 end
 
-local function announce(name)
-    if not name or QuestPingDB.chat == false then
-        return
+-- The raid icon on a unit, if the game says (it can keep it secret).
+local function iconOn(unit)
+    local icon = GetRaidTargetIndex and readable(GetRaidTargetIndex(unit))
+    return type(icon) == "number" and icon or nil
+end
+
+-- Raid icons on everyone in view now (nameplates, the target, the group): unit -> icon.
+local function iconsInView()
+    local icons = {}
+    local function look(unit)
+        if UnitExists(unit) then
+            icons[unit] = iconOn(unit)
+        end
     end
-    local channel = (IsInRaid() and "RAID") or (IsInGroup() and "PARTY") or nil
-    local send = C_ChatInfo and C_ChatInfo.SendChatMessage
-    if channel and send then
-        -- {rt1}..{rt8} are the raid icons (8 is the skull); every client draws them in chat
-        -- (ICON_TAG_RAID_TARGET_SKULL1 and the like). 0 sends no icon.
-        local icon = tonumber(QuestPingDB.chatIcon) or 8
-        local prefix = (icon >= 1 and icon <= 8) and ("{rt" .. icon .. "} ") or ""
-        pcall(send, prefix .. name .. " here", channel)
+    for _, unit in ipairs(plates) do
+        look(unit)
     end
+    look("target")
+    for i = 1, 4 do
+        look("party" .. i)
+    end
+    return icons
 end
 
 -- Mobs not to ping: pinged already, or already fighting someone.
@@ -190,11 +213,15 @@ local function refresh()
     end
     ticks = ticks + 1
     if wantedDirty or ticks >= HUNT_EVERY then
-        hunt = QP.Hunt(QuestPingDB.sources ~= false)
+        hunt = QP.Hunt(QuestPingDB.sources ~= false, ns.PartyNeeds and ns.PartyNeeds() or nil)
         wanted, wantedDirty, ticks = QP.WantedNames(hunt), false, 0
     end
-    local units, names = QP.Candidates(wanted, plates, tonumber(QuestPingDB.range))
+    local units, names = QP.Candidates(wanted, plates, tonumber(QuestPingDB.range),
+        QuestPingDB.party ~= false and partyNeeds or nil)
+    candidates = units
     local quiet = quietUnits(units)
+    local icons = iconsInView()
+    local raidMarks = QP.PickMarks(units, quiet, icons, tonumber(QuestPingDB.chatIcon) or 8)
 
     local nextUnit, nextName
     local sig = {}
@@ -204,7 +231,7 @@ local function refresh()
         if not quiet[unit] and not nextUnit then
             nextUnit, nextName = unit, names[i]
         end
-        sig[i] = unit .. (quiet[unit] and "*" or "")
+        sig[i] = unit .. (quiet[unit] and "*" or "") .. ":" .. (raidMarks[unit] or "")
     end
     button.Label:SetText(nextName or names[1] or "")
     button.Count:SetText(#names > 1 and tostring(#names) or "")
@@ -221,7 +248,7 @@ local function refresh()
     if sig == appliedSig or InCombatLockdown() then
         return
     end
-    applySteps(QP.Steps(units, quiet))
+    applySteps(QP.Steps(units, quiet, raidMarks, names))
     appliedSig = sig
 end
 
@@ -231,30 +258,47 @@ function ns.Refresh()
     refresh()
 end
 
--- After a press: the step's mob counts as pinged if the macro got it targeted (the ping went to the target);
--- say so in chat unless it's already in a fight. A step that stopped (in combat, on your own live target)
--- leaves it for a later press.
+-- After a press: whichever mob the macro got targeted counts as pinged (the ping goes to the target, and
+-- /targetexact takes the nearest of a name, which may not be the one the step was written for). The game says
+-- the ping in chat itself ("Attack: <mob>"), so QuestPing says nothing. A step that stopped (in combat, on
+-- your own live target) leaves it for later.
 local presses, lastRan, pressing = 0, nil, false -- for /questping status and ping errors
+local running = {} -- the step this press runs: its text, and whether it pings
 
-local function beforeClick()
+-- Before the click: read the step now, since targeting mid-macro rewrites the steps (PLAYER_TARGET_CHANGED).
+local function beforeClick(self)
     pressing = true
+    local text = self:GetAttribute("qp-macro" .. (self:GetAttribute("qp-step") or 1))
+    running.text, running.pings = text, text and pingByText[text] ~= nil
 end
 
-local function afterClick(self)
+local function afterClick()
     pressing = false
-    local text = self:GetAttribute("macrotext")
-    presses, lastRan = presses + 1, text
-    local unit = pingByText[text]
-    if unit and UnitExists(unit) and readable(UnitIsUnit(unit, "target")) and not UnitIsDead(unit) then
-        local key = pingKey(unit)
-        if not pingedAt[key] then
-            pingedAt[key] = GetTime()
-            if QP.Fresh(unit) then
-                announce(readable((UnitName(unit))))
+    presses, lastRan = presses + 1, running.text
+    if running.pings then
+        for _, unit in ipairs(candidates) do
+            if UnitExists(unit) and readable(UnitIsUnit(unit, "target")) and not UnitIsDead(unit) then
+                local key = pingKey(unit)
+                pingedAt[key] = pingedAt[key] or GetTime()
+                break
             end
         end
     end
     refresh()
+end
+
+local dragging, stopOwed = false, false
+
+-- Ends a shift-drag of the button and saves where it landed; in combat, once the fight ends.
+local function stopDragging()
+    if InCombatLockdown() then
+        stopOwed = true
+        return
+    end
+    stopOwed = false
+    button:StopMovingOrSizing()
+    local p, _, rp, x, y = button:GetPoint()
+    QuestPingDB.point = { p, rp, x, y }
 end
 
 local function placeButton()
@@ -355,15 +399,19 @@ local function createButton()
             ns.ToggleWindow()
         end
     end)
+    -- A drag without Shift never moved it, so there's nothing to stop; one that runs into a fight is let go
+    -- when the fight ends (the game blocks moving the button in combat).
     b:SetScript("OnDragStart", function(self)
         if IsShiftKeyDown() and not InCombatLockdown() then
+            dragging = true
             self:StartMoving()
         end
     end)
-    b:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local p, _, rp, x, y = self:GetPoint()
-        QuestPingDB.point = { p, rp, x, y }
+    b:SetScript("OnDragStop", function()
+        if dragging then
+            dragging = false
+            stopDragging()
+        end
     end)
     b:SetScript("OnEnter", function(self)
         paintBorder(self, BORDER_HOVER)
@@ -461,11 +509,15 @@ end
 function handlers.PLAYER_REGEN_ENABLED()
     if button then
         secure()
+        if stopOwed then
+            stopDragging()
+        end
     end
     refresh()
 end
 
 handlers.PLAYER_TARGET_CHANGED = refresh
+handlers.RAID_TARGET_UPDATE = refresh -- an icon went on or came off: the next mob gets the next free one
 
 function handlers.UPDATE_BINDINGS()
     if button then

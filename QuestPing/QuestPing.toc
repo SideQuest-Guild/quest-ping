@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: QuestPing
-## Notes: One key pings the quest mobs you still need when they are near, and says so in party chat.
+## Notes: One key targets, marks and pings the quest mobs you and your party still need when they are near.
 ## Author: SideQuest
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\Ability_Hunter_SniperShot
@@ -17,6 +17,7 @@ Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 Logic.lua
 Sources.lua
+Party.lua
 QuestPing.lua
 Window.lua
 Guide.lua

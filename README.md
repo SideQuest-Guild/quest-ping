@@ -1,8 +1,8 @@
 # QuestPing
 
 A World of Warcraft: Forever addon. When mobs you still need for a quest are near, a button shows up. Spam its
-key: each press pings the next one **Attack** for your group and says it in party chat, once per mob, and targets
-one for you.
+key: each press targets the next one, marks it with a raid icon and pings it **Attack** for your group, once per
+mob.
 
 It replaces a macro like this, without editing it for every quest:
 
@@ -14,10 +14,15 @@ It replaces a macro like this, without editing it for every quest:
 
 ## What a press does
 
-- **Targets the next mob not pinged yet and pings it** with the Attack ping, and says "Skullsplitter Mystic here"
-  in party chat with a raid icon in front (skull unless you pick another; raid chat in a raid; nothing when you're
-  alone). Each mob is pinged and called out once; it can be pinged again after 10 minutes. The game's `/ping`
-  only makes a ping on your target, not on a mob you aren't targeting, so the press has to target it.
+- **Targets the next mob not pinged yet and pings it** with the Attack ping. The game puts the ping in your
+  group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own. Each mob is pinged
+  once; it can be pinged again after 10 minutes. On Forever, `/target`
+  and `/ping` do nothing with a nameplate, so a press targets by name (`/targetexact`, like the old macro) and
+  pings your target. By name, the game picks which of several same-named mobs you get (the nearest, then the
+  next on later presses), so with a pack of one kind a press can land on one already pinged or in a fight.
+- **Marks it** with a raid icon: skull first (or the icon you pick), then cross, square and on down for each
+  other mob, skipping icons already on someone in view. A mob that already wears an icon keeps it. In a raid
+  only the leader and assistants can mark.
 - Once every mob in view is pinged, presses only target, so spamming is safe.
 - **Range** in the settings limits how far away a mob may be (8 to 48 yards, or any nameplate, the default).
 - A **bouncing arrow** sits over the nameplate of the mob the next press will ping, and a **quest icon** sits
@@ -37,6 +42,12 @@ Shift-drag moves it.
 - **Wanted:** every kill objective in your quest log that isn't finished ("3/10 Skullsplitter Mystic slain").
   With Polestar or Questie installed, its quest database adds the mobs that drop quest items ("2/6 Troll Tusk")
   and the mobs a kill line counts under a group name ("Gnolls slain"). Polestar is asked first.
+- **For your party:** a mob stays wanted while someone in your group still needs it, even after you're done.
+  The game's own tooltip on a mob lists every party member on its quest with their count ("Aewie Booty 5/8
+  Tumbled Crystal"), and QuestPing reads that, so it works with no addon on their side and covers drop items
+  too. QuestPing users in the group also share what they still need in hidden addon messages (party or raid
+  only), and Polestar's party sync counts when it's on; those show in the hunt window ("For Ana"). "Hunt for
+  your party too" in the settings turns all of this off.
 - **Near:** the mob has an enemy nameplate up, which the game shows out to 45 yards. Enemy nameplates are off by
   default; `/questping plates` turns them on.
 - **Never:** dead, friendly, or tapped by someone else (the grey ones).
@@ -57,7 +68,7 @@ Shift-drag moves it.
   Attune's: the quests you're hunting on the left with how many of their mobs are near, and the picked quest on
   the right with a progress bar, each objective, which mobs count for it and how many are near.
 - **Settings** are under **Options > AddOns > QuestPing** (or the window's Settings button, or
-  `/questping options`): party chat on or off, which raid icon goes in front, the nameplate arrow, the quest
+  `/questping options`): which raid icon a press marks with (or none), the nameplate arrow, the quest
   icons, the guide arrow, the range, using quest databases, enemy nameplates, the ping button, the minimap button, and
   putting things back where they start.
 - `/questping status` prints what you're hunting and what's near in chat.

@@ -18,6 +18,8 @@ local client = {
     "LibStub",
     "Polestar", "Questie", "QuestieLoader", -- optional quest databases (Sources.lua)
     "C_Map", "CreateVector2D", "GetPlayerFacing", "IsInInstance",
+    "Ambiguate", "GetNumGroupMembers", "GetNumSubgroupMembers", "UNKNOWNOBJECT", -- party sync (Party.lua)
+    "GetRaidTargetIndex", "C_TooltipInfo", "Enum",
 }
 
 read_globals = {

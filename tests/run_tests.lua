@@ -25,7 +25,7 @@ local SECRET = setmetatable({}, { __tostring = function() return "<secret>" end 
 local world
 
 local function reset()
-    world = { units = {}, quests = {}, combat = false, group = nil, chat = {}, now = 100 }
+    world = { units = {}, quests = {}, combat = false, group = nil, chat = {}, addon = {}, now = 100 }
 end
 reset()
 
@@ -45,7 +45,24 @@ function InCombatLockdown() return world.combat end
 function GetTime() return world.now end
 function IsInRaid() return world.group == "raid" end
 function IsInGroup() return world.group ~= nil end
-C_ChatInfo = { SendChatMessage = function(msg, channel) world.chat[#world.chat + 1] = channel .. ": " .. msg end }
+function IsShiftKeyDown() return world.shift end
+function GetRaidTargetIndex(u) return world.units[u] and world.units[u].icon end
+C_ChatInfo = {
+    SendChatMessage = function(msg, channel) world.chat[#world.chat + 1] = channel .. ": " .. msg end,
+    SendAddonMessage = function(prefix, msg, channel)
+        world.addon[#world.addon + 1] = channel .. " " .. prefix .. " " .. msg
+    end,
+    RegisterAddonMessagePrefix = function() end,
+}
+function Ambiguate(name) return name end
+UNKNOWNOBJECT = "Unknown"
+-- Party members are party1..partyN in world.units, like the client's tokens.
+function GetNumSubgroupMembers()
+    local n = 0
+    while world.units["party" .. (n + 1)] do n = n + 1 end
+    return n
+end
+function GetNumGroupMembers() return GetNumSubgroupMembers() + 1 end
 C_QuestLog = {
     GetNumQuestLogEntries = function() return #world.quests, #world.quests end,
     GetInfo = function(i)
@@ -236,26 +253,74 @@ test("a mob in a fight, or whose combat state is secret, isn't fresh", function(
     eq(QP.Fresh("nameplate3"), false)
 end)
 
-test("one ping step per mob not quiet, then a target-only step; all under the length cap", function()
+test("one ping step per mob not quiet, then a target-only step; targeting goes by name", function()
     eq(QP.Steps({}, {}), nil)
-    local steps = QP.Steps({ "nameplate8", "nameplate6", "nameplate7" }, { nameplate6 = true })
+    local units = { "nameplate8", "nameplate6", "nameplate7" }
+    local names = { "Skullsplitter Mystic", "Skullsplitter Mystic", "Venture Co. Geologist" }
+    local steps = QP.Steps(units, { nameplate6 = true }, {}, names)
     eq(#steps, 3)
     eq(steps[1].ping, "nameplate8")
     eq(steps[2].ping, "nameplate7", "quiet mob skipped")
     eq(steps[3].ping, nil)
-    local keep = "/cleartarget [dead]\n/stopmacro [combat,@target,harm,nodead]\n"
-    eq(steps[1].text, keep .. "/target [@nameplate8,harm,nodead]\n/ping [@target,harm,nodead] 1",
-        "target the mob, then ping the target")
-    eq(steps[3].text, keep .. "/target [@nameplate8,harm,nodead][@nameplate6,harm,nodead][@nameplate7,harm,nodead]")
+    local keep = "/cleartarget [dead]\n/stopmacro [combat,harm,nodead]\n"
+    eq(steps[2].text, keep .. "/targetexact Venture Co. Geologist\n/cleartarget [dead]\n/ping [@target,harm,nodead] 1",
+        "target by name, drop a corpse, then ping the target")
+    eq(steps[3].text, keep .. "/targetexact [noexists] Skullsplitter Mystic", "the last keeps a live target")
 
-    local many = {}
-    for i = 11, 40 do many[#many + 1] = "nameplate" .. i end
-    steps = QP.Steps(many, {})
+    local odd = QP.Steps({ "nameplate1", "nameplate2" }, {}, {}, { "Bad;Name", string.rep("x", 200) })
+    eq(odd, nil, "a name a macro line can't carry gets no step")
+
+    local many, manyNames = {}, {}
+    for i = 11, 40 do
+        many[#many + 1] = "nameplate" .. i
+        manyNames[#manyNames + 1] = string.rep("y", QP.MAX_NAME)
+    end
+    steps = QP.Steps(many, {}, {}, manyNames)
     eq(#steps, QP.MAX_PINGS + 1)
     for _, s in ipairs(steps) do
-        assert(#s.text <= QP.MACRO_LIMIT, "length " .. #s.text)
+        assert(#s.text <= 255, "length " .. #s.text)
     end
-    assert(steps[#steps].text:find("/target [@nameplate11,", 1, true), "the last step keeps the first plate")
+end)
+
+test("raid icons: your first choice, then the next free one; a marked mob keeps its own", function()
+    local units = { "nameplate1", "nameplate2", "nameplate3", "nameplate4" }
+    local marks = QP.PickMarks(units, { nameplate4 = true }, { nameplate2 = 8, party1 = 7 }, 8)
+    eq(marks.nameplate1, 6, "skull on nameplate2 and cross on a party member: square")
+    eq(marks.nameplate2, nil, "already wears the skull")
+    eq(marks.nameplate3, 5)
+    eq(marks.nameplate4, nil, "quiet: no press will ping it")
+    eq(QP.PickMarks(units, {}, {}, 1).nameplate2, 8, "star first, then skull")
+    eq(next(QP.PickMarks(units, {}, {}, 0)), nil, "no icon: no marks")
+    local step = QP.Steps({ "nameplate1" }, {}, { nameplate1 = 8 }, { "Skullsplitter Mystic" })[1]
+    assert(step.text:find("\n/tm [@target,harm,nodead] ~8\n/ping", 1, true), step.text)
+end)
+
+test("party needs travel as quest IDs and objective indexes, split under the message limit", function()
+    eq(QP.EncodeNeeds({}, false)[1], "1S|", "needs nothing")
+    local msgs = QP.EncodeNeeds({ { q = 33, need = { 1, 3 } }, { q = 60, need = { 2 } } }, true)
+    eq(#msgs, 1)
+    eq(msgs[1], "1R|33:1.3;60:2")
+    local kind, needs = QP.DecodeNeeds(msgs[1])
+    eq(kind, "R")
+    eq(needs[33][1] and needs[33][3] and not needs[33][2], true)
+    eq(needs[60][2], true)
+
+    local many = {}
+    for q = 10001, 10040 do many[#many + 1] = { q = q, need = { 1, 2, 3 } } end
+    msgs = QP.EncodeNeeds(many, false)
+    assert(#msgs > 1, "40 quests don't fit in one message")
+    local seen = 0
+    for i, m in ipairs(msgs) do
+        assert(#m <= 255, "message " .. i .. " is " .. #m .. " bytes")
+        local k, n = QP.DecodeNeeds(m)
+        eq(k, i == 1 and "S" or "+")
+        for _ in pairs(n) do seen = seen + 1 end
+    end
+    eq(seen, 40, "every quest arrives once")
+
+    eq(QP.DecodeNeeds("2S|33:1"), nil, "another version")
+    eq(QP.DecodeNeeds("1S|33:x"), nil, "malformed")
+    eq(QP.DecodeNeeds("hello"), nil)
 end)
 
 ---------------------------------------------------------------------------
@@ -330,7 +395,7 @@ C_NamePlate = {
     end,
 }
 C_CVar = { GetCVarBool = function() return true end }
-C_Timer = { NewTicker = function() end }
+C_Timer = { NewTicker = function() end, After = function(_, fn) fn() end }
 SlashCmdList = {}
 UISpecialFrames = {}
 function GetPlayerFacing() return 0 end
@@ -355,9 +420,17 @@ assert(loadfile("QuestPing/Guide.lua"))("QuestPing", ns)
 local guideClock, guideEvents = created[#created - 1], created[#created]
 guideEvents.scripts.OnEvent(guideEvents, "PLAYER_LOGIN")
 
+-- Party sync (Party.lua): its event frame and its own login.
+assert(loadfile("QuestPing/Party.lua"))("QuestPing", ns)
+local partyEvents = created[#created]
+local function partyFire(event, ...) partyEvents.scripts.OnEvent(partyEvents, event, ...) end
+partyFire("PLAYER_LOGIN")
+
 -- A press: PreClick, the secure snippet (which may set attributes in combat, like the real restricted
--- environment), the macro it picked run line by line the way the game would, then PostClick. Returns the mob
--- the macro pinged, or nil. Like the game, /ping makes a ping only for @target.
+-- environment), the macro it picked run line by line the way the game does, then PostClick. Returns the mob
+-- the macro pinged, or nil. As seen in game: /ping pings only @target, and /target [@nameplateN] does nothing.
+-- /targetexact Name takes the nearest unit of that name, dead ones too (here: the lowest nameplate number);
+-- assumed, like the game's other target-by-name commands: with one of that name already targeted, the next.
 local function currentTarget()
     for unit, u in pairs(world.units) do
         if u.target then return unit end
@@ -369,20 +442,47 @@ local function liveHostile(unit)
     return u and not u.dead and not u.friendly
 end
 
+local function setTarget(unit)
+    local target = currentTarget()
+    if target then world.units[target].target = nil end
+    if unit then world.units[unit].target = true end
+end
+
+local function targetExact(name, target)
+    local named = {}
+    for unit, u in pairs(world.units) do
+        if u.name == name and unit:match("^nameplate") then named[#named + 1] = unit end
+    end
+    table.sort(named, function(x, y) return tonumber(x:match("%d+")) < tonumber(y:match("%d+")) end)
+    for i, unit in ipairs(named) do
+        if unit == target then return named[i % #named + 1] end
+    end
+    return named[1]
+end
+
 local function runMacro(text)
     for line in text:gmatch("[^\n]+") do
         local target = currentTarget()
         if line == "/cleartarget [dead]" then
-            if target and world.units[target].dead then world.units[target].target = nil end
-        elseif line == "/stopmacro [combat,@target,harm,nodead]" then
+            if target and world.units[target].dead then setTarget(nil) end
+        elseif line == "/stopmacro [combat,harm,nodead]" then
             if world.combat and liveHostile(target) then return nil end
-        elseif line:match("^/target ") then
-            for unit in line:gmatch("%[@(nameplate%d+),harm,nodead%]") do
-                if liveHostile(unit) then
-                    if target then world.units[target].target = nil end
-                    world.units[unit].target = true
-                    break
+        elseif line:match("^/targetexact ") then
+            local noexists, name = line:match("^/targetexact (%[noexists%] )(.+)$")
+            name = name or line:match("^/targetexact (.+)$")
+            if not (noexists and target) then
+                local unit = targetExact(name, target)
+                if unit then setTarget(unit) end
+            end
+        elseif line:match("^/tm %[@target,harm,nodead%] ~%d$") then
+            -- "~": only a mob with no icon; an icon is on one unit at a time, so it moves off any other.
+            local icon = tonumber(line:match("(%d)$"))
+            if liveHostile(target) and not world.units[target].icon then
+                for _, u in pairs(world.units) do
+                    if u.icon == icon then u.icon = nil end
                 end
+                world.units[target].icon = icon
+                fire("RAID_TARGET_UPDATE")
             end
         elseif line == "/ping [@target,harm,nodead] 1" then
             if liveHostile(target) then return target end
@@ -405,14 +505,24 @@ local function near(unit, fields)
     fire("NAME_PLATE_UNIT_ADDED", unit)
 end
 
-test("each press pings the next mob once, says it in party, then only targets", function()
-    world.quests = { { id = 1, objectives = { kill("Skullsplitter Mystic", 0, 10) } } }
+-- Takes every nameplate out of view and drops the target, so a test starts with nothing near.
+local function clearPlates()
+    for unit in pairs(world.units) do
+        world.units[unit] = nil
+        fire("NAME_PLATE_UNIT_REMOVED", unit)
+    end
+end
+
+local MYSTIC, HUNTER, THROWER = "Skullsplitter Mystic", "Skullsplitter Hunter", "Skullsplitter Axe Thrower"
+
+test("each press targets the next mob by name, marks and pings it, then only targets", function()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
     world.group = "party"
     fire("QUEST_LOG_UPDATE")
     eq(b.shown, false, "nothing near")
-    near("nameplate3", { name = "Skullsplitter Mystic" })
-    near("nameplate5", { name = "Skullsplitter Mystic", fighting = true })
-    near("nameplate7", { name = "Skullsplitter Mystic" })
+    near("nameplate3", { name = MYSTIC })
+    near("nameplate5", { name = HUNTER, fighting = true })
+    near("nameplate7", { name = THROWER })
     eq(b.shown, true)
     eq(arrow.parent and arrow.parent.unit, "nameplate3", "arrow over the next mob")
 
@@ -422,22 +532,33 @@ test("each press pings the next mob once, says it in party, then only targets", 
     eq(arrow.shown, false, "nothing left to ping")
     eq(press(), nil, "already pinged, and nameplate5 is fighting")
     eq(press(), nil)
-    eq(table.concat(world.chat, "|"), "PARTY: {rt8} Skullsplitter Mystic here|PARTY: {rt8} Skullsplitter Mystic here")
-    eq(b.Label.text, "Skullsplitter Mystic")
+    eq(currentTarget(), "nameplate7", "the last press keeps a live target")
+    eq(#world.chat, 0, "the game says the ping in chat itself; QuestPing says nothing")
+    eq(world.units.nameplate3.icon, 8, "skull on the first")
+    eq(world.units.nameplate7.icon, 7, "cross on the next")
+    eq(world.units.nameplate5.icon, nil, "a mob in a fight isn't marked")
+end)
+
+test("several mobs of one name: each press takes the next of that name", function()
+    clearPlates()
+    near("nameplate14", { name = MYSTIC })
+    near("nameplate15", { name = MYSTIC })
+    eq(press(), "nameplate14", "the nearest first")
+    eq(press(), "nameplate15", "then the next of that name")
+    eq(press(), nil, "both pinged: the last press keeps the live target")
 end)
 
 test("in combat a press never pulls you off a live target; the rest wait for the fight to end", function()
-    world.chat = {}
+    clearPlates()
     world.group = "raid"
-    local t = currentTarget()
-    if t then world.units[t].target = nil end
-    near("nameplate9", { name = "Skullsplitter Mystic" })
-    near("nameplate10", { name = "Skullsplitter Mystic" })
+    near("nameplate9", { name = MYSTIC })
+    near("nameplate10", { name = THROWER })
     world.combat = true
     eq(press(), "nameplate9", "no live target yet: it targets and pings")
     eq(press(), nil, "on a live target now: the press stops there")
     eq(currentTarget(), "nameplate9")
-    eq(table.concat(world.chat, "|"), "RAID: {rt8} Skullsplitter Mystic here", "the stopped press counts nothing")
+    eq(world.units.nameplate9.icon, 8)
+    eq(world.units.nameplate10.icon, nil, "the stopped press marks nothing")
 
     world.combat = false
     fire("PLAYER_REGEN_ENABLED")
@@ -447,7 +568,7 @@ end)
 
 test("pings wear off, and a mob that leaves and comes back stays pinged", function()
     fire("NAME_PLATE_UNIT_REMOVED", "nameplate9")
-    near("nameplate9", { name = "Skullsplitter Mystic" })
+    near("nameplate9", { name = MYSTIC })
     eq(press(), nil)
     world.now = world.now + 601
     fire("PLAYER_TARGET_CHANGED")
@@ -455,29 +576,24 @@ test("pings wear off, and a mob that leaves and comes back stays pinged", functi
     assert(again ~= nil, "pinged again after it wore off")
 end)
 
--- Takes every nameplate out of view, so a test starts with nothing near.
-local function clearPlates()
-    for unit in pairs(world.units) do
-        world.units[unit] = nil
-        fire("NAME_PLATE_UNIT_REMOVED", unit)
-    end
-end
-
-test("the chat icon setting picks the raid icon, or none", function()
+test("the raid icon setting picks the icon, or none", function()
     clearPlates()
-    world.chat = {}
     QuestPingDB.chatIcon = 1
-    near("nameplate11", { name = "Skullsplitter Mystic" })
+    near("nameplate11", { name = MYSTIC })
     eq(press(), "nameplate11")
+    eq(world.units.nameplate11.icon, 1)
     QuestPingDB.chatIcon = 0
-    near("nameplate12", { name = "Skullsplitter Mystic" })
+    ns.Refresh()
+    near("nameplate12", { name = THROWER })
     eq(press(), "nameplate12")
-    eq(table.concat(world.chat, "|"), "RAID: {rt1} Skullsplitter Mystic here|RAID: Skullsplitter Mystic here")
+    eq(world.units.nameplate12.icon, nil, "no icon: no mark")
     QuestPingDB.chatIcon = nil
 end)
 
 test("the window lists the hunted quest with how many of its mobs are near", function()
     clearPlates()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10) } } }
+    fire("QUEST_LOG_UPDATE")
     near("nameplate13", { name = "Skullsplitter Mystic" })
     ns.ToggleWindow()
     local w = created.QuestPingWindow
@@ -580,6 +696,92 @@ test("the range setting drops mobs farther than it; a range item the game hasn't
     eq(#ns.state.shown, 2, "no answer counts as in range")
     QuestPingDB.range, C_Item = nil, nil
     clearPlates()
+end)
+
+test("a mob you're done with stays hunted while a party member still needs it", function()
+    clearPlates()
+    world.quests = { { id = 1, objectives = { kill("Skullsplitter Mystic", 10, 10) } } }
+    world.group = "party"
+    world.addon = {}
+    world.units.party1 = { name = "Ana", friendly = true }
+    partyFire("GROUP_ROSTER_UPDATE")
+    eq(world.addon[#world.addon], "PARTY QuestPing 1R|", "someone joined: ours (nothing) and a request for theirs")
+    fire("QUEST_LOG_UPDATE")
+    near("nameplate40", { name = "Skullsplitter Mystic" })
+    eq(b.shown, false, "done, and nobody said they need it")
+
+    partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Ana")
+    eq(b.shown, true, "Ana still needs objective 1")
+    eq(ns.state.hunt[1].objectives[1].done, true, "done for you")
+    eq(ns.state.hunt[1].objectives[1].party[1], "Ana")
+    eq(press(), "nameplate40")
+
+    partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|", "PARTY", "Ana")
+    eq(b.shown, false, "Ana's done too")
+    partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Stranger")
+    eq(b.shown, false, "only the group counts")
+
+    partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Ana")
+    eq(b.shown, true)
+    world.units.party1 = nil
+    partyFire("GROUP_ROSTER_UPDATE")
+    eq(b.shown, false, "Ana left: her needs go with her")
+    world.group = nil
+    clearPlates()
+end)
+
+test("a mob whose tooltip shows someone in the group short on its quest counts, drop items included", function()
+    clearPlates()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 10, 10) } } }
+    fire("QUEST_LOG_UPDATE")
+    -- The game's own unit tooltip: quest title, then each player on it with their count (type 8 lines).
+    C_TooltipInfo = { GetUnit = function(unit)
+        local lines = world.units[unit] and world.units[unit].tooltip
+        if lines == SECRET then return SECRET end
+        return lines and { lines = lines } or nil
+    end }
+    local function objective(text, completed) return { type = 8, leftText = text, completed = completed } end
+    near("nameplate50", { name = "Venture Co. Geologist", tooltip = {
+        { type = 17, leftText = "Hostile Takeover" }, { type = 18, leftText = "Legs Behindhead" },
+        objective("8/8 Tumbled Crystal", true), { type = 18, leftText = "Aewie Booty" },
+        objective("5/8 Tumbled Crystal") } })
+    near("nameplate51", { name = "Venture Co. Geologist", tooltip = { objective("8/8 Tumbled Crystal", true) } })
+    near("nameplate52", { name = "Venture Co. Geologist", tooltip = SECRET })
+    eq(#ns.state.shown, 1, "only the one a party member still needs (5/8, read from the count)")
+    eq(press(), "nameplate50", "and a press takes it")
+    QuestPingDB.party = false
+    ns.Refresh()
+    eq(#ns.state.shown, 0, "Hunt for your party too: off")
+    QuestPingDB.party, C_TooltipInfo = nil, nil
+    clearPlates()
+end)
+
+test("dragging the button never lets it go in combat, and a drag without Shift never moved it", function()
+    local stops, moves = 0, 0
+    b.StartMoving = function() moves = moves + 1 end
+    b.StopMovingOrSizing = function()
+        assert(not world.combat, "StopMovingOrSizing in combat")
+        stops = stops + 1
+    end
+    b.GetPoint = function() return "CENTER", nil, "CENTER", 10, 20 end
+    world.combat = true
+    b.scripts.OnDragStart(b)
+    b.scripts.OnDragStop(b)
+    eq(moves + stops, 0, "a drag in combat (with or without Shift) touches nothing")
+    world.combat, world.shift = false, false
+    b.scripts.OnDragStart(b)
+    b.scripts.OnDragStop(b)
+    eq(moves + stops, 0, "without Shift there's nothing to stop")
+    world.shift = true
+    b.scripts.OnDragStart(b)
+    world.combat = true -- the fight starts mid-drag
+    b.scripts.OnDragStop(b)
+    eq(stops, 0)
+    world.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    eq(stops, 1, "let go once the fight ends")
+    eq(QuestPingDB.point[3], 10)
+    world.shift, QuestPingDB.point = nil, nil
 end)
 
 test("finishing the objective hides the button", function()

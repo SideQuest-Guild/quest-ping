@@ -60,11 +60,8 @@ local function register()
     Settings.RegisterAddOnCategory(category)
 
     header("Pinging")
-    checkbox("chat", "Say it in party chat", true,
-        "When a press pings a mob, say \"<mob> here\" in party chat, or raid chat in a raid. Once per mob; never "
-            .. "for a mob already in a fight, and never when you're alone.")
     local iconSetting = Settings.RegisterAddOnSetting(category, "QUESTPING_CHATICON", "chatIcon", QuestPingDB,
-        Settings.VarType.Number, "Chat icon", 8)
+        Settings.VarType.Number, "Raid icon", 8)
     Settings.CreateDropdown(category, iconSetting, function()
         local options = Settings.CreateControlTextContainer()
         for i = 8, 1, -1 do
@@ -72,7 +69,10 @@ local function register()
         end
         options:Add(0, "No icon")
         return options:GetData()
-    end, "The raid icon in front of the party chat line. Everyone in the group sees it.")
+    end, "The raid icon a press puts on the mob, so everyone sees which one: this one first, then the next free one "
+        .. "(skull, cross, square...) for each other mob. Never takes an icon off a mob. In a raid only the leader "
+        .. "and assistants can mark. No icon: no marking.")
+    Settings.SetOnValueChangedCallback("QUESTPING_CHATICON", ns.Refresh)
     checkbox("arrow", "Arrow over the next mob", true,
         "A bouncing arrow over the nameplate of the mob the next press will ping.")
     checkbox("marks", "Mark free quest mobs", true,
@@ -100,6 +100,15 @@ local function register()
     end, "How far away a quest mob may be and still count as near. Max is as far as the game shows enemy "
         .. "nameplates. Closer keeps the button and pings on mobs you can reach soon.")
     Settings.SetOnValueChangedCallback("QUESTPING_RANGE", ns.Refresh)
+    checkbox("party", "Hunt for your party too", true,
+        "Keep hunting a mob you're done with while someone in your group still needs it. Party members running "
+            .. "QuestPing share what they still need (hidden addon messages, party or raid only); so do ones "
+            .. "running Polestar with its party sharing on.")
+    Settings.SetOnValueChangedCallback("QUESTPING_PARTY", function()
+        if ns.UpdateParty then
+            ns.UpdateParty()
+        end
+    end)
     checkbox("sources", "Use quest databases", true,
         "Read Polestar's or Questie's quest database, when one is installed, to also hunt the mobs that drop quest "
             .. "items (\"2/6 Troll Tusk\") and kill objectives named for a group (\"Gnolls slain\"), and to give the "

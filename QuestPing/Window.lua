@@ -262,7 +262,12 @@ local function updateDetail(quest, shown)
             local near = o.finished and 0 or nearFor(o, shown)
             row.Near:SetText(near > 0 and (GREEN .. near .. " near|r") or "")
             local own = #o.names == 1 and o.text:find(o.names[1], 1, true)
-            row.Mobs:SetText(own and "" or (table.concat(o.names, ", ") .. "  (" .. o.source .. ")"))
+            local mobs = own and "" or (table.concat(o.names, ", ") .. "  (" .. o.source .. ")")
+            if o.party then
+                -- Who in the group still needs it ("For Ana, Ben"); you may be done with it yourself.
+                mobs = "For " .. table.concat(o.party, ", ") .. (mobs ~= "" and ("  ·  " .. mobs) or "")
+            end
+            row.Mobs:SetText(mobs)
         end
     end
     if not quest then

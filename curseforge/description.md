@@ -1,6 +1,6 @@
 # QuestPing
 
-QuestPing is a World of Warcraft: Forever addon for quest hunting. When a mob you still need is near, a button appears. Press its key and QuestPing pings the mob for your group, names it in party chat and targets it.
+QuestPing is a World of Warcraft: Forever addon for quest hunting. When a mob you still need is near, a button appears. Press its key and QuestPing targets the mob, marks it with a raid icon and pings it for your group.
 
 It replaces this macro, which you would otherwise edit for every quest:
 
@@ -12,9 +12,10 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 ## Each press
 
-- Targets the next mob you have not pinged yet and pings it with the Attack ping. The game only makes a ping on your target, so the press has to target the mob.
-- Says "Skullsplitter Mystic here" in party chat, with a raid icon in front. In a raid it uses raid chat. Alone, it says nothing.
-- Pings and names each mob once, so you can press the key as often as you like. Once every mob is pinged, a press only targets.
+- Targets the next mob you have not pinged yet, by name, and pings it with the Attack ping. The game only makes a ping on your target, so the press has to target the mob. When several mobs share a name, the game picks which one you get.
+- The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own.
+- Marks the mob with a raid icon: the skull first, then the cross, then the square and so on for each other mob. It skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
+- Pings each mob once, so you can press the key as often as you like. Once every mob is pinged, a press only targets.
 - The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows.
 
 A bouncing arrow sits over the nameplate of the mob the next press will ping. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
@@ -26,6 +27,8 @@ When no mob you still need is in view, an arrow near the top of the screen point
 ## Mobs it finds
 
 QuestPing reads your quest log and hunts every kill objective you have not finished, such as "3/10 Skullsplitter Mystic slain". New quests count as soon as you take them.
+
+It also hunts for your party. If you have finished an objective but someone in your group still needs it, QuestPing keeps hunting those mobs. It reads the game's own tooltip on each mob, which lists every party member on the quest with their count, so nobody else needs the addon. Party members who run QuestPing or Polestar also share their progress for the hunt window.
 
 A mob counts as near when its enemy nameplate shows, which the game does up to 45 yards away. QuestPing skips mobs that are dead, friendly, tapped by another player or already in a fight.
 
@@ -43,8 +46,7 @@ Open the hunt window with `/questping`, its key binding or the minimap button. T
 
 The settings are in Options > AddOns > QuestPing. You can:
 
-- turn party chat on or off
-- pick the raid icon
+- pick the raid icon for marking, or none
 - turn the nameplate arrow on or off
 - turn the quest icons on or off
 - turn the guide arrow on or off
