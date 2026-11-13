@@ -1,8 +1,8 @@
 # QuestPing
 
-A World of Warcraft: Forever addon. When mobs you still need for a quest are near, a button shows up. Spam its
-key: each press targets the next one, marks it with a raid icon and pings it **Attack** for your group, once per
-mob.
+A World of Warcraft: Forever addon. When mobs you still need for a quest are around, spam one key: a press
+targets the next one, and the press after marks it with a raid icon and pings it **Attack** for your group, once
+per mob, but only if it's free to take.
 
 It replaces a macro like this, without editing it for every quest:
 
@@ -14,24 +14,28 @@ It replaces a macro like this, without editing it for every quest:
 
 ## What a press does
 
-- **Targets the next mob not pinged yet and pings it** with the Attack ping. The game puts the ping in your
-  group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own. Each mob is pinged
-  once; it can be pinged again after 10 minutes. On Forever, `/target`
-  and `/ping` do nothing with a nameplate, so a press targets by name (`/targetexact`, like the old macro) and
-  pings your target. By name, the game picks which of several same-named mobs you get (the nearest, then the
-  next on later presses), so with a pack of one kind a press can land on one already pinged or in a fight.
-- **Marks it** with a raid icon: skull first (or the icon you pick), then cross, square and on down for each
-  other mob, skipping icons already on someone in view. A mob that already wears an icon keeps it. In a raid
-  only the leader and assistants can mark.
-- Once every mob in view is pinged, presses only target, so spamming is safe.
-- **Far mobs:** with no quest mob targeted, a press also looks for the ones too far for a nameplate (you can see
-  their names past 45 yards, but the game gives addons nothing about them). It drops your target and tries each
-  far name in turn with `/targetexact`, then pings what it found, unmarked: QuestPing can't tell a far mob is
-  tapped or in a fight until it's targeted. The ping button stays hidden for far mobs; the key works anyway.
+Like Polestar's target button, a press **targets first**; the ping comes on the next press, once QuestPing can
+see what you've got.
+
+- **No quest mob targeted, or yours is done with:** the press targets the next one by name (`/targetexact`,
+  like the old macro), trying the free ones in view first and then the ones too far for a nameplate (you can
+  see their names past 45 yards, but the game tells addons nothing about them until they're your target). If
+  it finds none, you keep the quest mob you had.
+- **Your target is a quest mob that's free** (not tapped, not in a fight, not pinged in the last 10 minutes):
+  the press **marks** it with a raid icon and **pings** it Attack. A tapped or busy one is never marked or
+  pinged, far ones included; the next press just moves on.
+- The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line
+  of its own.
+- Raid icons: skull first (or the icon you pick), then cross, square and on down for each other mob, skipping
+  icons already on someone in view. A mob that already wears an icon keeps it. In a raid only the leader and
+  assistants can mark.
+- On Forever, `/target` and `/ping` do nothing with a nameplate, which is why targeting goes by name. By name,
+  the game picks which of several same-named mobs you get (the nearest, then the next on later presses).
 - **Range** in the settings limits how far away a mob may be (8 to 48 yards, or any nameplate, the default).
   With a Range set, far mobs are out of it.
-- A **bouncing arrow** sits over the nameplate of the mob a press marked, while it's your target, and a
-  **quest icon** sits beside every needed mob nobody has (not tapped, not in a fight).
+- A **bouncing arrow** sits over the nameplate of the mob you pinged, while it's your target, and a **quest
+  icon** sits beside every needed mob nobody has (not tapped, not in a fight).
+- The ping button only shows for mobs in view; for far ones, the key works anyway.
 
 ## Spawn guide arrow
 
@@ -80,8 +84,8 @@ instances. Shift-drag moves it.
 ## In combat
 
 The game only lets an addon rewrite the button out of combat, and a press never pulls you off a live target in a
-fight. So in a fight a press pings only while you have no live target; the mobs it skips get their pings when the
-fight ends.
+fight. So in a fight a press targets the next mob only while you have no live target, and a mob you target
+mid-fight gets its ping once the fight ends (the next press then pings it, if it's still free).
 
 ## What no addon can do
 

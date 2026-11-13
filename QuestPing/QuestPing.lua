@@ -1,9 +1,9 @@
 -- QuestPing/QuestPing.lua
 -- The button: shown while a quest mob you still need has a nameplate up (or always, or never: the "button"
--- setting). Each press (a click, the key binding or "/click QuestPingButton") targets, marks and pings the next
--- mob not pinged yet; with none in view it looks for the ones too far for a nameplate by name. Once every one is
--- pinged, presses only target. Mobs already in a fight (with you or anyone) are never pinged. A bouncing arrow
--- sits over the nameplate of the mob you pressed for, while it's your target.
+-- setting). A press (a click, the key binding or "/click QuestPingButton") targets the next quest mob by name,
+-- in view or too far for a nameplate, like Polestar's target button. Once it's your target QuestPing can see
+-- whether it's free (not tapped, not in a fight, not pinged yet), and if so the next press marks and pings it.
+-- A bouncing arrow sits over the nameplate of the mob you pinged, while it's your target.
 --
 -- TargetUnit and C_Ping.SendMacroPing are protected, so this is a SecureActionButton running macros the addon
 -- writes (Logic.lua's QP.Steps): one per press, stored as qp-macro1..n. A secure snippet wrapped around the
@@ -220,11 +220,11 @@ local function refresh()
     local range = tonumber(QuestPingDB.range)
     local units, names = QP.Candidates(wanted, plates, range, QuestPingDB.party ~= false and partyNeeds or nil)
     candidates = units
-    -- Far mobs (no nameplate) are looked for by name, which drops your target first: not while it's a quest
-    -- mob you need, and not with a Range set (a far mob is out of it by definition).
+    -- Your target first: a quest mob you have targeted is the one the next press pings. With a Range set, far
+    -- mobs (no nameplate) are out of it by definition.
     local first = units[1]
     local onQuestMob = first and (first == "target" or readable(UnitIsUnit(first, "target"))) and true or false
-    local far = (not range or range == 0) and not onQuestMob and QP.FarNames(hunt, plates) or {}
+    local far = (not range or range == 0) and QP.FarNames(hunt, plates) or {}
     local quiet = quietUnits(units)
     local icons = iconsInView()
     local raidMarks = QP.PickMarks(units, quiet, icons, tonumber(QuestPingDB.chatIcon) or 8)
@@ -243,7 +243,7 @@ local function refresh()
     if onQuestMob and pingedAt[pingKey(first)] then
         pressedFor = first
     end
-    button.Label:SetText(nextName or names[1] or far[1] or "")
+    button.Label:SetText(nextName or far[1] or names[1] or "")
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
     button:SetAlpha(#units > 0 and 1 or 0.5)
@@ -254,11 +254,11 @@ local function refresh()
         fn()
     end
 
-    sig = table.concat(sig, ",") .. "|" .. table.concat(far, ",")
+    sig = (onQuestMob and "T|" or "|") .. table.concat(sig, ",") .. "|" .. table.concat(far, ",")
     if sig == appliedSig or InCombatLockdown() then
         return
     end
-    applySteps(QP.Steps(units, quiet, raidMarks, names, far), #units > 0)
+    applySteps(QP.Steps(units, quiet, raidMarks, names, far, onQuestMob), #units > 0)
     appliedSig = sig
 end
 
@@ -438,7 +438,8 @@ local function createButton()
         if #shown == 0 then
             GameTooltip:AddLine("No quest mob near.", 1, 1, 1)
         end
-        GameTooltip:AddLine("Click to ping the next one. Right-click for the window. Shift-drag to move.",
+        GameTooltip:AddLine("Click to target the next one, again to ping it. Right-click for the window. "
+            .. "Shift-drag to move.",
             0.6, 0.6, 0.6, true)
         if self.Hotkey:GetText() == "" then
             GameTooltip:AddLine("Or bind a key: Options > AddOns > QuestPing.", 0.6, 0.6, 0.6, true)
@@ -557,7 +558,7 @@ events:SetScript("OnEvent", function(_, event, ...)
 end)
 
 BINDING_HEADER_QUESTPING = "QuestPing"
-_G["BINDING_NAME_CLICK QuestPingButton:LeftButton"] = "Ping the next quest mob"
+_G["BINDING_NAME_CLICK QuestPingButton:LeftButton"] = "Target, then ping, the next quest mob"
 BINDING_NAME_QUESTPING_WINDOW = "Show or hide the QuestPing window"
 
 --- Put the button back where it starts (Options.lua's reset; the window resets itself).

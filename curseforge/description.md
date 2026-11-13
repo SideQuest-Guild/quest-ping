@@ -12,14 +12,16 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 ## Each press
 
-- Targets the next mob you have not pinged yet, by name, and pings it with the Attack ping. The game only makes a ping on your target, so the press has to target the mob. When several mobs share a name, the game picks which one you get.
+Like Polestar's target button, a press targets first. The ping comes on the next press, once QuestPing can see what you've got.
+
+- If you have no quest mob targeted, or you're done with yours, a press targets the next one by name. It tries the free ones in view first, then the ones too far for a nameplate. You can see a mob's name well past 45 yards, but the game tells addons nothing about it until it's your target. If it finds none, you keep the quest mob you had.
+- If your target is a quest mob that's free (not tapped, not in a fight, and not pinged in the last 10 minutes), a press marks it with a raid icon and pings it with the Attack ping. A tapped or busy mob is never marked or pinged, even a far one. The next press just moves on.
 - The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own.
-- Marks the mob with a raid icon: the skull first, then the cross, then the square and so on for each other mob. It skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
-- Pings each mob once, so you can press the key as often as you like. Once every mob is pinged, a press only targets.
-- Reaches mobs too far for a nameplate. You can see a mob's name well past 45 yards, but the game tells addons nothing about it. So when you have no quest mob targeted, a press drops your target, looks for each far mob by name and pings the one it finds. It doesn't mark it, since QuestPing can't tell whether a far mob is tapped or in a fight until it's targeted.
+- Raid icons go on in order: the skull first, then the cross, then the square and so on for each other mob. QuestPing skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
+- Targeting goes by name, since the game ignores nameplates for targeting. When several mobs share a name, the game picks which one you get.
 - The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows. With a Range set, far mobs are out of it.
 
-A bouncing arrow sits over the nameplate of the mob a press marked, while it's your target. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
+A bouncing arrow sits over the nameplate of the mob you pinged, while it's your target. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
 
 ## Spawn guide arrow
 
@@ -59,7 +61,7 @@ The settings are in Options > AddOns > QuestPing. You can:
 
 ## Setup
 
-1. Click the ping button when it appears, or bind "Ping the next quest mob" in Options > AddOns > QuestPing. The button shows its key in the corner and the next mob's name beside it. Shift-drag moves it.
+1. Click the ping button when it appears, or bind "Target, then ping, the next quest mob" in Options > AddOns > QuestPing. The button shows its key in the corner and the next mob's name beside it. Shift-drag moves it. For far mobs the button stays hidden, but the key works.
 2. Turn on enemy nameplates if they are off.
 
 To keep the button on an action bar, make a macro with `/click QuestPingButton`.
@@ -67,6 +69,6 @@ To keep the button on an action bar, make a macro with `/click QuestPingButton`.
 ## Limits
 
 - Addons can't ping on their own. The game only targets and pings from a key press or a click.
-- The game does not let addons change the button during combat, and a press never pulls you off a live target. In a fight, a press pings only while you have no live target. The mobs it skips get their pings when the fight ends.
+- The game does not let addons change the button during combat, and a press never pulls you off a live target. In a fight, a press targets the next mob only while you have no live target, and the ping waits until the fight ends.
 - The button acts when you release the key, so each press counts once.
 - The game tells addons about an enemy only through its nameplate or your target. So no arrow can point at a far mob, and the spawn guide arrow points at spawn places from the quest database, not at a live mob.

@@ -266,19 +266,31 @@ test("a mob in a fight, or whose combat state is secret, isn't fresh", function(
     eq(QP.Fresh("nameplate3"), false)
 end)
 
-test("one ping step per mob not quiet, then a target-only step; targeting goes by name", function()
+test("a press pings your target if it's free, and otherwise targets the next mob by name", function()
     eq(QP.Steps({}, {}), nil)
     local units = { "nameplate8", "nameplate6", "nameplate7" }
     local names = { "Skullsplitter Mystic", "Skullsplitter Mystic", "Venture Co. Geologist" }
-    local steps = QP.Steps(units, { nameplate6 = true }, {}, names)
-    eq(#steps, 3)
-    eq(steps[1].ping, "nameplate8")
-    eq(steps[2].ping, "nameplate7", "quiet mob skipped")
-    eq(steps[3].ping, nil)
     local keep = "/cleartarget [dead]\n/stopmacro [combat,harm,nodead]\n"
-    eq(steps[2].text, keep .. "/targetexact Venture Co. Geologist\n/cleartarget [dead]\n/ping [@target,harm,nodead] 1",
-        "target by name, drop a corpse, then ping the target")
-    eq(steps[3].text, keep .. "/targetexact [noexists] Skullsplitter Mystic", "the last keeps a live target")
+
+    local steps = QP.Steps(units, { nameplate6 = true }, {}, names, { "Far Mob" }, false)
+    eq(#steps, 1, "no quest mob targeted: only a targeting step")
+    eq(steps[1].ping, nil, "it pings nothing")
+    eq(steps[1].text, keep .. "/cleartarget\n/targetexact Skullsplitter Mystic\n/cleartarget [dead]\n"
+        .. "/targetexact [noexists] Venture Co. Geologist\n/cleartarget [dead]\n"
+        .. "/targetexact [noexists] Far Mob\n/cleartarget [dead]",
+        "in view first, skipping the quiet one's turn, then the far ones")
+
+    steps = QP.Steps(units, {}, { nameplate8 = 8 }, names, {}, true)
+    eq(#steps, 2)
+    eq(steps[1].ping, "nameplate8")
+    eq(steps[1].text, "/tm [@target,harm,nodead] ~8\n/ping [@target,harm,nodead] 1", "mark and ping, no retarget")
+    eq(steps[2].text, keep .. "/targetexact Skullsplitter Mystic\n/cleartarget [dead]\n"
+        .. "/targetexact [noexists] Venture Co. Geologist\n/cleartarget [dead]",
+        "then the next: the target isn't dropped when the next shares its name, so /targetexact moves on")
+
+    steps = QP.Steps(units, { nameplate8 = true, nameplate6 = true, nameplate7 = true }, {}, names, {}, true)
+    eq(#steps, 1)
+    eq(steps[1].text, keep .. "/targetexact [noexists] Skullsplitter Mystic", "all pinged: keep a live target")
 
     local odd = QP.Steps({ "nameplate1", "nameplate2" }, {}, {}, { "Bad;Name", string.rep("x", 200) })
     eq(odd, nil, "a name a macro line can't carry gets no step")
@@ -286,13 +298,10 @@ test("one ping step per mob not quiet, then a target-only step; targeting goes b
     local many, manyNames = {}, {}
     for i = 11, 40 do
         many[#many + 1] = "nameplate" .. i
-        manyNames[#manyNames + 1] = string.rep("y", QP.MAX_NAME)
+        manyNames[#manyNames + 1] = string.rep("y", QP.MAX_NAME - 2) .. i
     end
     steps = QP.Steps(many, {}, {}, manyNames)
-    eq(#steps, QP.MAX_PINGS + 1)
-    for _, s in ipairs(steps) do
-        assert(#s.text <= 255, "length " .. #s.text)
-    end
+    assert(#steps[1].text <= 255, "length " .. #steps[1].text)
 end)
 
 test("raid icons: your first choice, then the next free one; a marked mob keeps its own", function()
@@ -304,8 +313,8 @@ test("raid icons: your first choice, then the next free one; a marked mob keeps 
     eq(marks.nameplate4, nil, "quiet: no press will ping it")
     eq(QP.PickMarks(units, {}, {}, 1).nameplate2, 8, "star first, then skull")
     eq(next(QP.PickMarks(units, {}, {}, 0)), nil, "no icon: no marks")
-    local step = QP.Steps({ "nameplate1" }, {}, { nameplate1 = 8 }, { "Skullsplitter Mystic" })[1]
-    assert(step.text:find("\n/tm [@target,harm,nodead] ~8\n/ping", 1, true), step.text)
+    local step = QP.Steps({ "nameplate1" }, {}, { nameplate1 = 8 }, { "Skullsplitter Mystic" }, {}, true)[1]
+    assert(step.text:find("/tm [@target,harm,nodead] ~8\n/ping", 1, true), step.text)
 end)
 
 test("party needs travel as quest IDs and objective indexes, split under the message limit", function()
@@ -458,7 +467,11 @@ end
 
 local function setTarget(unit)
     local target = currentTarget()
-    if target then world.units[target].target = nil end
+    if target == unit then return end
+    if target then
+        world.units[target].target = nil
+        world.lastTarget = target
+    end
     if unit then world.units[unit].target = true end
 end
 
@@ -486,6 +499,8 @@ local function runMacro(text)
             if target and world.units[target].dead then setTarget(nil) end
         elseif line == "/cleartarget" then
             setTarget(nil)
+        elseif line == "/targetlasttarget [noexists]" then
+            if not target and world.lastTarget and world.units[world.lastTarget] then setTarget(world.lastTarget) end
         elseif line == "/stopmacro [combat,harm,nodead]" then
             if world.combat and liveHostile(target) then return nil end
         elseif line:match("^/targetexact ") then
@@ -536,7 +551,7 @@ end
 
 local MYSTIC, HUNTER, THROWER = "Skullsplitter Mystic", "Skullsplitter Hunter", "Skullsplitter Axe Thrower"
 
-test("each press targets the next mob by name, marks and pings it, then only targets", function()
+test("a press targets the next mob by name, the next marks and pings it", function()
     world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
     world.group = "party"
     fire("QUEST_LOG_UPDATE")
@@ -547,8 +562,13 @@ test("each press targets the next mob by name, marks and pings it, then only tar
     eq(b.shown, true)
     eq(arrow.shown, false, "no arrow before a press marks a mob")
 
-    eq(press(), "nameplate3")
+    eq(press(), nil, "the first press only targets")
+    eq(currentTarget(), "nameplate3")
+    eq(world.units.nameplate3.icon, nil, "not marked yet")
+    eq(press(), "nameplate3", "the next marks and pings it")
     eq(arrow.parent.unit, "nameplate3", "arrow over the mob the press marked")
+    eq(press(), nil)
+    eq(currentTarget(), "nameplate7", "then on to the next free one, past the one fighting")
     eq(press(), "nameplate7")
     eq(arrow.parent.unit, "nameplate7", "the arrow follows your target")
     eq(press(), nil, "already pinged, and nameplate5 is fighting")
@@ -560,31 +580,36 @@ test("each press targets the next mob by name, marks and pings it, then only tar
     eq(world.units.nameplate5.icon, nil, "a mob in a fight isn't marked")
 end)
 
-test("several mobs of one name: each press takes the next of that name", function()
+test("several mobs of one name: each target press takes the next of that name", function()
     clearPlates()
     near("nameplate14", { name = MYSTIC })
     near("nameplate15", { name = MYSTIC })
+    eq(press(), nil)
     eq(press(), "nameplate14", "the nearest first")
+    eq(press(), nil)
     eq(press(), "nameplate15", "then the next of that name")
     eq(press(), nil, "both pinged: the last press keeps the live target")
     eq(currentTarget(), "nameplate15")
 end)
 
-test("in combat a press never pulls you off a live target; the rest wait for the fight to end", function()
+test("in combat a press only targets and never pulls you off a live target; pings wait for the fight to end",
+    function()
     clearPlates()
     world.group = "raid"
     near("nameplate9", { name = MYSTIC })
     near("nameplate10", { name = THROWER })
     world.combat = true
-    eq(press(), "nameplate9", "no live target yet: it targets and pings")
+    eq(press(), nil, "no live target yet: it targets")
+    eq(currentTarget(), "nameplate9")
     eq(press(), nil, "on a live target now: the press stops there")
     eq(currentTarget(), "nameplate9")
-    eq(world.units.nameplate9.icon, 8)
-    eq(world.units.nameplate10.icon, nil, "the stopped press marks nothing")
+    eq(world.units.nameplate9.icon, nil)
 
     world.combat = false
     fire("PLAYER_REGEN_ENABLED")
-    eq(press(), "nameplate10", "after the fight it gets its ping")
+    eq(press(), "nameplate9", "after the fight your target gets its ping")
+    eq(press(), nil)
+    eq(press(), "nameplate10")
     eq(press(), nil, "both pinged")
 end)
 
@@ -605,12 +630,21 @@ test("a mob too far for a nameplate: a press finds it by name and pings it", fun
     world.units.far1 = { name = HUNTER } -- in sight, but past nameplate range: no NAME_PLATE_UNIT_ADDED
     fire("PLAYER_TARGET_CHANGED")
     eq(b.shown, false, "nothing in view, so no button; the key still works")
-    eq(press(), "far1", "found by name and pinged")
-    eq(press(), nil, "pinged already: it isn't looked for again")
+    eq(press(), nil, "found by name and targeted")
     eq(currentTarget(), "far1")
+    eq(press(), "far1", "then pinged")
+    eq(press(), nil, "pinged already: the press looks for the next and finds nothing")
+    eq(currentTarget(), "far1", "so you keep the one you had")
+
+    world.units.far5 = { name = MYSTIC, tapped = true }
+    eq(press(), nil)
+    eq(currentTarget(), "far5", "a tapped one can be found by name...")
+    eq(press(), nil, "...but never pinged")
+    world.units.far5 = nil
 
     near("nameplate4", { name = MYSTIC })
-    eq(press(), "nameplate4", "a mob in view still comes first")
+    eq(press(), nil)
+    eq(press(), "nameplate4", "a mob in view comes first")
 
     clearPlates()
     world.units.far2 = { name = MYSTIC, target = true } -- you clicked it yourself
@@ -633,11 +667,13 @@ test("the raid icon setting picks the icon, or none", function()
     clearPlates()
     QuestPingDB.chatIcon = 1
     near("nameplate11", { name = MYSTIC })
+    eq(press(), nil)
     eq(press(), "nameplate11")
     eq(world.units.nameplate11.icon, 1)
     QuestPingDB.chatIcon = 0
     ns.Refresh()
     near("nameplate12", { name = THROWER })
+    eq(press(), nil)
     eq(press(), "nameplate12")
     eq(world.units.nameplate12.icon, nil, "no icon: no mark")
     QuestPingDB.chatIcon = nil
@@ -770,6 +806,7 @@ test("a mob you're done with stays hunted while a party member still needs it", 
     eq(b.shown, true, "Ana still needs objective 1")
     eq(ns.state.hunt[1].objectives[1].done, true, "done for you")
     eq(ns.state.hunt[1].objectives[1].party[1], "Ana")
+    eq(press(), nil)
     eq(press(), "nameplate40")
 
     partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|", "PARTY", "Ana")
@@ -804,6 +841,7 @@ test("a mob whose tooltip shows someone in the group short on its quest counts, 
     near("nameplate51", { name = "Venture Co. Geologist", tooltip = { objective("8/8 Tumbled Crystal", true) } })
     near("nameplate52", { name = "Venture Co. Geologist", tooltip = SECRET })
     eq(#ns.state.shown, 1, "only the one a party member still needs (5/8, read from the count)")
+    eq(press(), nil)
     eq(press(), "nameplate50", "and a press takes it")
     QuestPingDB.party = false
     ns.Refresh()
@@ -863,7 +901,8 @@ test("the button setting: always keeps it up idle, never hides it but the key st
     near("nameplate20", { name = "Skullsplitter Mystic" })
     fire("PLAYER_REGEN_ENABLED")
     eq(b.shown, false, "never shown")
-    eq(press(), "nameplate20", "the key binding's click still pings")
+    eq(press(), nil)
+    eq(press(), "nameplate20", "the key binding's clicks still target and ping")
 
     QuestPingDB.button = nil
     ns.Refresh()

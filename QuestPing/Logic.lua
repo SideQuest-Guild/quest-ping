@@ -402,22 +402,27 @@ function QP.Fresh(unit)
     return readable(UnitAffectingCombat(unit)) == false
 end
 
---- What each press of the button does, in order: one step per mob to ping (every unit not in quiet, which
--- maps unit -> true for mobs pinged already or already in a fight), then one step for the far mobs (far, from
--- QP.FarNames), then a last step that only targets and repeats on every press after it. Nil for nothing to
--- target. Each step is { text = macro, ping = unit, or true for the far step }; names are the units' names
--- (QP.Candidates) and marks (QP.PickMarks) maps a unit to the raid icon its step puts on it.
+--- What the next presses do, target first and ping second, like Polestar's target button plus a ping:
 --
--- A step clears a dead target, targets its mob by name, marks it and pings the target. Forever's /target and
--- /ping do nothing with a nameplate unit (/target [@nameplate1] and /ping [@nameplate3] 1 run silently in
--- game), while /targetexact by name does work: it takes the nearest mob of that name, so a step can't pick
--- which of several same-named mobs it gets, and a dead one is cleared again. The step for a target that has
--- no nameplate keeps it rather than look it up again. "/tm ~8" marks only a mob with no raid icon yet, so a
--- press never takes one off. The far step drops your target and tries each far name in turn until one is
--- found, then pings it unmarked: a mob beyond nameplate range might be tapped, which shows only once it's
--- targeted. In combat while you have a live hostile target, a step stops before targeting, so spamming the
--- key mid-fight never pulls you off the mob you're hitting (and pings nothing). A mob whose name a macro line
--- can't carry gets no step.
+-- 1. When your target is a quest mob that's free to ping (onTarget: units[1] is the target, and it isn't in
+--    quiet, which maps unit -> true for mobs pinged already or already in a fight), a press marks it and pings
+--    it, without targeting anything.
+-- 2. Otherwise a press targets the next mob: the unpinged ones in view (names, from QP.Candidates), then the
+--    ones too far for a nameplate (far, from QP.FarNames), the first of them it finds by name. It pings
+--    nothing: once the mob is your target QuestPing can see whether it's tapped or fighting, and only a free one
+--    gets step 1 on the next press.
+--
+-- Returns { step 1?, step 2 } or nil for nothing to do. Each step is { text = macro, ping = unit or nil };
+-- marks (QP.PickMarks) maps a unit to the raid icon step 1 puts on it. After step 1 the button falls through
+-- to step 2, which repeats: out of combat the steps are rewritten after every target change anyway, and in
+-- combat (steps frozen at the pull) a press after a ping moves on to the next mob.
+--
+-- Why by name: Forever's /target and /ping do nothing with a nameplate unit (/target [@nameplate1] and /ping
+-- [@nameplate3] 1 run silently in game), while /targetexact does work, as far as you can see a mob. It takes
+-- the nearest mob of that name (with one of that name targeted, the next), so it can't pick which of several
+-- same-named mobs it gets. "/tm ~8" marks only a mob with no raid icon yet, so a press never takes one off. In
+-- combat while you have a live hostile target, step 2 stops before targeting, so spamming the key mid-fight
+-- never pulls you off the mob you're hitting. A mob whose name a macro line can't carry is skipped.
 local KEEP_TARGET = "/stopmacro [combat,harm,nodead]\n"
 local PING_TARGET = "/ping [@target,harm,nodead] 1"
 local MACRO_LIMIT = 255
@@ -426,48 +431,62 @@ local function usable(name)
     return type(name) == "string" and name ~= "" and #name <= QP.MAX_NAME and not name:find("[%c%[%];]")
 end
 
-local function farStep(far)
-    local head = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/cleartarget\n"
-    local lines, size = {}, #head + #PING_TARGET
-    for _, name in ipairs(far or {}) do
-        if usable(name) then
-            local line = "/targetexact " .. (#lines > 0 and "[noexists] " or "") .. name .. "\n/cleartarget [dead]\n"
-            if size + #line > MACRO_LIMIT then
-                break
-            end
-            lines[#lines + 1], size = line, size + #line
+-- Step 2: try each name until one is found. The target is dropped first so a name that isn't around can't
+-- leave you on the old one; if the old one was a quest mob (targetName), it's taken back at the end
+-- (/targetlasttarget) when none was found. Not dropped when the old one shares the first name: /targetexact
+-- then moves on to the next of that name, which it can't do from no target.
+local TAKE_BACK = "/targetlasttarget [noexists]"
+
+local function targetStep(chain, targetName)
+    local clears = chain[1] ~= targetName
+    local head = "/cleartarget [dead]\n" .. KEEP_TARGET .. (clears and "/cleartarget\n" or "")
+    local tail = (clears and targetName) and TAKE_BACK or ""
+    local lines, size = {}, #head + #tail
+    for _, name in ipairs(chain) do
+        local line = "/targetexact " .. (#lines > 0 and "[noexists] " or "") .. name .. "\n/cleartarget [dead]\n"
+        if size + #line > MACRO_LIMIT then
+            break
         end
+        lines[#lines + 1], size = line, size + #line
     end
-    if #lines == 0 then
-        return nil
-    end
-    return { text = head .. table.concat(lines) .. PING_TARGET, ping = true }
+    local text = head .. table.concat(lines) .. tail
+    return { text = tail ~= "" and text or text:sub(1, -2) }
 end
 
-function QP.Steps(units, quiet, marks, names, far)
+function QP.Steps(units, quiet, marks, names, far, onTarget)
     marks, names = marks or {}, names or {}
-    local steps, first = {}, nil
-    for i, unit in ipairs(units) do
-        local name = names[i]
-        if usable(name) then
-            first = first or name
-            if not quiet[unit] and #steps < QP.MAX_PINGS then
-                local mark = marks[unit]
-                steps[#steps + 1] = {
-                    text = "/cleartarget [dead]\n" .. KEEP_TARGET
-                        .. (unit == "target" and "" or ("/targetexact " .. name .. "\n/cleartarget [dead]\n"))
-                        .. (mark and ("/tm [@target,harm,nodead] ~" .. mark .. "\n") or "") .. PING_TARGET,
-                    ping = unit,
-                }
-            end
+    local steps = {}
+    local target = onTarget and units[1] or nil
+    if target and not quiet[target] then
+        local mark = marks[target]
+        steps[1] = { text = (mark and ("/tm [@target,harm,nodead] ~" .. mark .. "\n") or "") .. PING_TARGET,
+            ping = target }
+    end
+    local chain, listed = {}, {}
+    local function add(name)
+        if usable(name) and not listed[name] then
+            listed[name] = true
+            chain[#chain + 1] = name
         end
     end
-    local seek = farStep(far)
-    if seek then
-        steps[#steps + 1] = seek
+    for i, unit in ipairs(units) do
+        if unit ~= target and not quiet[unit] then
+            add(names[i])
+        end
     end
-    if first then
-        steps[#steps + 1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. first }
+    for _, name in ipairs(far or {}) do
+        add(name)
+    end
+    if #chain > 0 then
+        steps[#steps + 1] = targetStep(chain, onTarget and names[1] or nil)
+    elseif #steps == 0 then
+        -- Nothing new to take: keep a live target, or take back the first mob in view.
+        for i in ipairs(units) do
+            if usable(names[i]) then
+                steps[1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. names[i] }
+                break
+            end
+        end
     end
     return #steps > 0 and steps or nil
 end
