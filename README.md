@@ -41,7 +41,10 @@ needs one of them. It hides in instances. Shift-drag moves it.
 
 ## Use
 
-- Bind it under **Options > Key Bindings > AddOns > QuestPing**, or click the button. Shift-drag moves it.
+- **Click the ping button** or bind a key (Options > AddOns > QuestPing has the key rows too). The button shows
+  its key in the corner and the next mob's name beside it. Shift-drag moves it.
+- The **Ping button** setting picks when the button is on screen: when a quest mob is near (default), always
+  (dimmed while nothing is near, so you can find and place it), or never (key binding only).
 - To keep your own macro button, make its text `/click QuestPingButton`.
 - The button acts when you let go of the key, not when you press it, so each press counts once.
 

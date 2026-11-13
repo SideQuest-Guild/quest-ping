@@ -50,10 +50,11 @@ The settings are in Options > AddOns > QuestPing. You can:
 - turn the quest databases on or off
 - turn enemy nameplates on or off
 - show or hide the minimap button
+- show the ping button when a quest mob is near, always, or never
 
 ## Setup
 
-1. Bind "Ping the next quest mob" in Options > Key Bindings > AddOns > QuestPing.
+1. Click the ping button when it appears, or bind "Ping the next quest mob" in Options > AddOns > QuestPing. The button shows its key in the corner and the next mob's name beside it. Shift-drag moves it.
 2. Turn on enemy nameplates if they are off.
 
 To keep the button on an action bar, make a macro with `/click QuestPingButton`.

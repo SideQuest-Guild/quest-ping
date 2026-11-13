@@ -1,8 +1,9 @@
 -- QuestPing/QuestPing.lua
--- The button: shown while a quest mob you still need has a nameplate up. Each press (a click, the key binding
--- or "/click QuestPingButton") pings the next mob not pinged yet and says its name in party or raid chat; once
--- every one is pinged, presses only target. Mobs already in a fight (with you or anyone) are never pinged or
--- called out. A bouncing arrow sits over the nameplate of the next mob a press will ping.
+-- The button: shown while a quest mob you still need has a nameplate up (or always, or never: the "button"
+-- setting). Each press (a click, the key binding or "/click QuestPingButton") pings the next mob not pinged yet
+-- and says its name in party or raid chat; once every one is pinged, presses only target. Mobs already in a
+-- fight (with you or anyone) are never pinged or called out. A bouncing arrow sits over the nameplate of the
+-- next mob a press will ping.
 --
 -- TargetUnit and C_Ping.SendMacroPing are protected, so this is a SecureActionButton running macros the addon
 -- writes (Logic.lua's QP.Steps): one per press, stored as qp-macro1..n. A secure snippet wrapped around the
@@ -38,6 +39,9 @@ local stepCount = 0
 local appliedSig -- the units and pings the steps were written for
 local shown = {} -- { name, quiet } per candidate, for the tooltip and the window
 local button, arrow, secured
+
+local BINDING = "CLICK QuestPingButton:LeftButton"
+local BORDER, BORDER_HOVER = { 1, 0.82, 0, 0.45 }, { 1, 0.82, 0, 1 }
 
 -- What the window (Window.lua) draws: the hunt (Logic.lua's QP.Hunt) and the candidates in view.
 ns.state = { hunt = hunt, shown = shown }
@@ -132,7 +136,10 @@ local function applySteps(steps)
     button:SetAttribute("qp-step", 1)
     button:SetAttribute("type", steps and "macro" or nil)
     button:SetAttribute("macrotext", steps and steps[1].text or nil)
-    if steps then
+    -- "near" (default): only while there's a mob to press for. "always": also idle, dimmed, so you can find,
+    -- move and click it. "never": key binding only (a hidden button still takes its binding's clicks).
+    local mode = QuestPingDB.button
+    if mode == "always" or (mode ~= "never" and steps) then
         button:Show()
     else
         button:Hide()
@@ -164,6 +171,7 @@ local function refresh()
     button.Label:SetText(nextName or names[1] or "")
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
+    button:SetAlpha(#units > 0 and 1 or 0.5)
     pointArrowAt(nextUnit)
     ns.state.hunt, ns.state.shown = hunt, shown
     for _, fn in ipairs(ns.listeners) do
@@ -178,9 +186,9 @@ local function refresh()
     appliedSig = sig
 end
 
---- Re-read everything now: a setting changed (Options.lua) or the window opened.
+--- Re-read everything now and rewrite the steps: a setting changed (Options.lua) or the window opened.
 function ns.Refresh()
-    wantedDirty = true
+    wantedDirty, appliedSig = true, nil
     refresh()
 end
 
@@ -227,6 +235,20 @@ local function createArrow()
     return f
 end
 
+local function paintBorder(b, color)
+    for _, edge in ipairs(b.Border) do
+        edge:SetColorTexture(color[1], color[2], color[3], color[4])
+    end
+end
+
+-- The key bound to the button, short form ("S-F", "M4"), in its top-left corner like an action button.
+local function refreshHotkey()
+    local key = GetBindingKey and GetBindingKey(BINDING)
+    button.Hotkey:SetText(key and (GetBindingText and GetBindingText(key, true) or key) or "")
+end
+
+-- Looks like Polestar's quest buttons: dark square, thin gold edge that lights on hover, the key in the
+-- corner, how many are near in the other, and the next mob's name beside it.
 local function createButton()
     local b = CreateFrame("Button", "QuestPingButton", UIParent, "SecureActionButtonTemplate")
     b:SetSize(36, 36)
@@ -237,23 +259,46 @@ local function createButton()
 
     local bg = b:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(b)
-    bg:SetColorTexture(0, 0, 0, 0.6)
+    bg:SetColorTexture(0.05, 0.05, 0.07, 0.85)
+
+    b.Border = {}
+    for i, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
+        { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+        local edge = b:CreateTexture(nil, "BORDER")
+        edge:SetPoint(side[1])
+        edge:SetPoint(side[2])
+        if i <= 2 then
+            edge:SetHeight(1)
+        else
+            edge:SetWidth(1)
+        end
+        b.Border[i] = edge
+    end
+    paintBorder(b, BORDER)
 
     b.Icon = b:CreateTexture(nil, "ARTWORK")
-    b.Icon:SetPoint("TOPLEFT", 3, -3)
-    b.Icon:SetPoint("BOTTOMRIGHT", -3, 3)
+    b.Icon:SetPoint("TOPLEFT", 2, -2)
+    b.Icon:SetPoint("BOTTOMRIGHT", -2, 2)
     b.Icon:SetAtlas("Ping_Map_Whole_Attack")
 
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(b)
+    hl:SetAllPoints(b.Icon)
     hl:SetColorTexture(1, 1, 1, 0.12)
+
+    local pushed = b:CreateTexture(nil, "OVERLAY")
+    pushed:SetAllPoints(b.Icon)
+    pushed:SetColorTexture(0, 0, 0, 0.35)
+    b:SetPushedTexture(pushed)
 
     b.Count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     b.Count:SetPoint("BOTTOMRIGHT", -2, 2)
 
+    b.Hotkey = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.Hotkey:SetPoint("TOPLEFT", 3, -3)
+    b.Hotkey:SetTextColor(0.75, 0.75, 0.75)
+
     b.Label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     b.Label:SetPoint("LEFT", b, "RIGHT", 6, 0)
-
     b:SetScript("PostClick", afterClick)
     b:SetScript("OnMouseUp", function(_, mouseButton)
         if mouseButton == "RightButton" and ns.ToggleWindow then
@@ -271,6 +316,7 @@ local function createButton()
         QuestPingDB.point = { p, rp, x, y }
     end)
     b:SetScript("OnEnter", function(self)
+        paintBorder(self, BORDER_HOVER)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("QuestPing")
         for _, s in ipairs(shown) do
@@ -280,11 +326,18 @@ local function createButton()
                 GameTooltip:AddLine(s.name, 1, 1, 1)
             end
         end
-        GameTooltip:AddLine("Each press pings the next one. Right-click for the window. Shift-drag to move.",
-            0.6, 0.6, 0.6)
+        if #shown == 0 then
+            GameTooltip:AddLine("No quest mob near.", 1, 1, 1)
+        end
+        GameTooltip:AddLine("Click to ping the next one. Right-click for the window. Shift-drag to move.",
+            0.6, 0.6, 0.6, true)
+        if self.Hotkey:GetText() == "" then
+            GameTooltip:AddLine("Or bind a key: Options > AddOns > QuestPing.", 0.6, 0.6, 0.6, true)
+        end
         GameTooltip:Show()
     end)
-    b:SetScript("OnLeave", function()
+    b:SetScript("OnLeave", function(self)
+        paintBorder(self, BORDER)
         GameTooltip:Hide()
     end)
     return b
@@ -312,6 +365,7 @@ function handlers.PLAYER_LOGIN()
     button = createButton()
     arrow = createArrow()
     placeButton()
+    refreshHotkey()
     for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
         local unit = plate.namePlateUnitToken
         if unit then
@@ -356,6 +410,12 @@ function handlers.PLAYER_REGEN_ENABLED()
 end
 
 handlers.PLAYER_TARGET_CHANGED = refresh
+
+function handlers.UPDATE_BINDINGS()
+    if button then
+        refreshHotkey()
+    end
+end
 
 local events = CreateFrame("Frame")
 for event in pairs(handlers) do

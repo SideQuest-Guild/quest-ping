@@ -484,5 +484,28 @@ test("finishing the objective hides the button", function()
     eq(b.attrs.type, nil)
 end)
 
+test("the button setting: always keeps it up idle, never hides it but the key still works", function()
+    QuestPingDB.button = "always"
+    ns.Refresh()
+    eq(b.shown, true, "idle but on screen to click and move")
+    eq(b.attrs.type, nil, "a click with nothing near does nothing")
+
+    world.quests[1].objectives[1] = kill("Skullsplitter Mystic", 0, 10)
+    clearPlates()
+    QuestPingDB.button = "never"
+    world.combat = true
+    ns.Refresh() -- changed mid-fight: nothing protected moves until it ends
+    eq(b.shown, true)
+    world.combat = false
+    near("nameplate20", { name = "Skullsplitter Mystic" })
+    fire("PLAYER_REGEN_ENABLED")
+    eq(b.shown, false, "never shown")
+    eq(press(), "nameplate20", "the key binding's click still pings")
+
+    QuestPingDB.button = nil
+    ns.Refresh()
+    eq(b.shown, true, "default: shown while a mob is near")
+end)
+
 print(("%d tests, %d failed"):format(count, failures))
 os.exit(failures == 0 and 0 or 1)

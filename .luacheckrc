@@ -14,7 +14,7 @@ local client = {
     "SecureHandlerWrapScript", "UIParent", "UnitAffectingCombat", "UnitCanAttack", "UnitExists", "UnitGUID",
     "UnitIsDead", "UnitIsTapDenied", "UnitIsUnit", "UnitName", "issecretvalue",
     "Settings", "SettingsPanel", "CreateSettingsButtonInitializer", "CreateKeybindingEntryInitializer",
-    "GetNumBindings", "GetBinding", "CLOSE", "SETTINGS",
+    "GetNumBindings", "GetBinding", "GetBindingKey", "GetBindingText", "CLOSE", "SETTINGS",
     "LibStub",
     "Polestar", "Questie", "QuestieLoader", -- optional quest databases (Sources.lua)
     "C_Map", "CreateVector2D", "GetPlayerFacing", "IsInInstance",

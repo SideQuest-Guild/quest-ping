@@ -86,9 +86,9 @@ local function register()
 
     header("Finding mobs")
     checkbox("sources", "Use quest databases", true,
-        "Read Polestar's quest database, when Polestar has it loaded, to also hunt the mobs that drop quest items "
-            .. "(\"2/6 Troll Tusk\") and kill objectives named for a group (\"Gnolls slain\"). Off: only mobs the "
-            .. "quest log names.")
+        "Read Polestar's or Questie's quest database, when one is installed, to also hunt the mobs that drop quest "
+            .. "items (\"2/6 Troll Tusk\") and kill objectives named for a group (\"Gnolls slain\"), and to give the "
+            .. "guide arrow its spawn places. Off: only mobs the quest log names.")
     local plates = Settings.RegisterProxySetting(category, "QUESTPING_ENEMY_PLATES", Settings.VarType.Boolean,
         "Enemy nameplates", false,
         function() return C_CVar.GetCVarBool("nameplateShowEnemies") end,
@@ -106,6 +106,18 @@ local function register()
     bindingRows()
 
     header("Window and button")
+    local buttonSetting = Settings.RegisterAddOnSetting(category, "QUESTPING_BUTTON", "button", QuestPingDB,
+        Settings.VarType.String, "Ping button", "near")
+    Settings.CreateDropdown(category, buttonSetting, function()
+        local options = Settings.CreateControlTextContainer()
+        options:Add("near", "When a quest mob is near")
+        options:Add("always", "Always")
+        options:Add("never", "Never (key binding only)")
+        return options:GetData()
+    end, "The button you click to ping, if you'd rather not bind a key. \"Always\" keeps it on screen, dimmed "
+        .. "while nothing is near, so you can find it and shift-drag it where you want. In combat the change waits "
+        .. "for the fight to end.")
+    Settings.SetOnValueChangedCallback("QUESTPING_BUTTON", ns.Refresh)
     button("Hunt window", "Open", ns.ToggleWindow,
         "The quests you're hunting, their mobs and how many are near. Also /questping, or right-click the ping button.")
     local minimap = Settings.RegisterProxySetting(category, "QUESTPING_MINIMAP", Settings.VarType.Boolean,
