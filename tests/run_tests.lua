@@ -31,15 +31,28 @@ reset()
 
 QUEST_MONSTERS_KILLED = "%2$d/%3$d %1$s slain"
 function issecretvalue(v) return v == SECRET end
-function UnitExists(u) return world.units[u] ~= nil end
-function UnitCanAttack(_, u) return not world.units[u].friendly end
-function UnitIsDead(u) return world.units[u].dead or false end
-function UnitIsTapDenied(u) return world.units[u].tapped or false end
-function UnitAffectingCombat(u) return world.units[u].fighting or false end
-function UnitName(u) return world.units[u].name end
-function UnitGUID(u) return world.units[u].guid or ("Creature-" .. u) end
+-- A unit by token; "target" is whichever unit has target set (a nameplate, or a far one with no nameplate).
+local function U(u)
+    if u == "target" then
+        for key, v in pairs(world.units) do
+            if v.target then return v, key end
+        end
+        return nil
+    end
+    return world.units[u], u
+end
+function UnitExists(u) return U(u) ~= nil end
+function UnitCanAttack(_, u) return not U(u).friendly end
+function UnitIsDead(u) return U(u).dead or false end
+function UnitIsTapDenied(u) return U(u).tapped or false end
+function UnitAffectingCombat(u) return U(u).fighting or false end
+function UnitName(u) return U(u).name end
+function UnitGUID(u)
+    local v, key = U(u)
+    return v.guid or ("Creature-" .. key)
+end
 function UnitIsUnit(u, other)
-    return other == "target" and world.units[u].target or false
+    return other == "target" and U(u).target or false
 end
 function InCombatLockdown() return world.combat end
 function GetTime() return world.now end
@@ -429,8 +442,9 @@ partyFire("PLAYER_LOGIN")
 -- A press: PreClick, the secure snippet (which may set attributes in combat, like the real restricted
 -- environment), the macro it picked run line by line the way the game does, then PostClick. Returns the mob
 -- the macro pinged, or nil. As seen in game: /ping pings only @target, and /target [@nameplateN] does nothing.
--- /targetexact Name takes the nearest unit of that name, dead ones too (here: the lowest nameplate number);
--- assumed, like the game's other target-by-name commands: with one of that name already targeted, the next.
+-- /targetexact Name takes the nearest unit of that name, dead ones too (here: the lowest nameplate number, then
+-- units with no nameplate, the far ones); assumed, like the game's other target-by-name commands: with one of
+-- that name already targeted, the next.
 local function currentTarget()
     for unit, u in pairs(world.units) do
         if u.target then return unit end
@@ -448,12 +462,17 @@ local function setTarget(unit)
     if unit then world.units[unit].target = true end
 end
 
+local function nearness(unit)
+    local n = tonumber(unit:match("%d+")) or 0
+    return unit:match("^nameplate") and n or 1000 + n
+end
+
 local function targetExact(name, target)
     local named = {}
     for unit, u in pairs(world.units) do
-        if u.name == name and unit:match("^nameplate") then named[#named + 1] = unit end
+        if u.name == name then named[#named + 1] = unit end
     end
-    table.sort(named, function(x, y) return tonumber(x:match("%d+")) < tonumber(y:match("%d+")) end)
+    table.sort(named, function(x, y) return nearness(x) < nearness(y) end)
     for i, unit in ipairs(named) do
         if unit == target then return named[i % #named + 1] end
     end
@@ -465,6 +484,8 @@ local function runMacro(text)
         local target = currentTarget()
         if line == "/cleartarget [dead]" then
             if target and world.units[target].dead then setTarget(nil) end
+        elseif line == "/cleartarget" then
+            setTarget(nil)
         elseif line == "/stopmacro [combat,harm,nodead]" then
             if world.combat and liveHostile(target) then return nil end
         elseif line:match("^/targetexact ") then
@@ -524,12 +545,12 @@ test("each press targets the next mob by name, marks and pings it, then only tar
     near("nameplate5", { name = HUNTER, fighting = true })
     near("nameplate7", { name = THROWER })
     eq(b.shown, true)
-    eq(arrow.parent and arrow.parent.unit, "nameplate3", "arrow over the next mob")
+    eq(arrow.shown, false, "no arrow before a press marks a mob")
 
     eq(press(), "nameplate3")
-    eq(arrow.parent.unit, "nameplate7")
+    eq(arrow.parent.unit, "nameplate3", "arrow over the mob the press marked")
     eq(press(), "nameplate7")
-    eq(arrow.shown, false, "nothing left to ping")
+    eq(arrow.parent.unit, "nameplate7", "the arrow follows your target")
     eq(press(), nil, "already pinged, and nameplate5 is fighting")
     eq(press(), nil)
     eq(currentTarget(), "nameplate7", "the last press keeps a live target")
@@ -546,6 +567,7 @@ test("several mobs of one name: each press takes the next of that name", functio
     eq(press(), "nameplate14", "the nearest first")
     eq(press(), "nameplate15", "then the next of that name")
     eq(press(), nil, "both pinged: the last press keeps the live target")
+    eq(currentTarget(), "nameplate15")
 end)
 
 test("in combat a press never pulls you off a live target; the rest wait for the fight to end", function()
@@ -574,6 +596,37 @@ test("pings wear off, and a mob that leaves and comes back stays pinged", functi
     fire("PLAYER_TARGET_CHANGED")
     local again = press()
     assert(again ~= nil, "pinged again after it wore off")
+end)
+
+test("a mob too far for a nameplate: a press finds it by name and pings it", function()
+    clearPlates()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10) } } }
+    fire("QUEST_LOG_UPDATE")
+    world.units.far1 = { name = HUNTER } -- in sight, but past nameplate range: no NAME_PLATE_UNIT_ADDED
+    fire("PLAYER_TARGET_CHANGED")
+    eq(b.shown, false, "nothing in view, so no button; the key still works")
+    eq(press(), "far1", "found by name and pinged")
+    eq(press(), nil, "pinged already: it isn't looked for again")
+    eq(currentTarget(), "far1")
+
+    near("nameplate4", { name = MYSTIC })
+    eq(press(), "nameplate4", "a mob in view still comes first")
+
+    clearPlates()
+    world.units.far2 = { name = MYSTIC, target = true } -- you clicked it yourself
+    fire("PLAYER_TARGET_CHANGED")
+    assert(not b.attrs["qp-macro1"]:find("targetexact", 1, true), "your own target is pinged as it is")
+    eq(press(), "far2")
+
+    clearPlates()
+    QuestPingDB.range = 28
+    world.units.far3 = { name = HUNTER }
+    ns.Refresh()
+    eq(press(), nil, "with a Range set, far mobs are out of it")
+    QuestPingDB.range = nil
+    clearPlates()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
+    fire("QUEST_LOG_UPDATE")
 end)
 
 test("the raid icon setting picks the icon, or none", function()
@@ -619,6 +672,9 @@ test("the guide arrow points at the nearest spawn until a needed mob is in view"
     fire("QUEST_LOG_UPDATE")
     local g = created.QuestPingGuide
     guideClock.scripts.OnUpdate(guideClock, 1)
+    eq(g.shown, false, "off unless turned on: a spawn is only a guess")
+    QuestPingDB.spawnArrow = true
+    guideClock.scripts.OnUpdate(guideClock, 1)
     eq(g.shown, true)
     assert(g.Text.text:find("Skullsplitter Mystic", 1, true) and g.Text.text:find("100 yd", 1, true), g.Text.text)
     assert(math.abs(g.Arrow.rotation - math.pi / 2) < 1e-9, "spawn is due west: arrow turns left")
@@ -641,10 +697,10 @@ test("the guide arrow points at the nearest spawn until a needed mob is in view"
     eq(g.shown, false, "the nameplate arrow takes over")
 
     clearPlates()
-    QuestPingDB.guide = false
+    QuestPingDB.spawnArrow = false
     guideClock.scripts.OnUpdate(guideClock, 1)
     eq(g.shown, false, "switched off")
-    QuestPingDB.guide = nil
+    QuestPingDB.spawnArrow = nil
     Questie, QuestieLoader = nil, nil
 end)
 

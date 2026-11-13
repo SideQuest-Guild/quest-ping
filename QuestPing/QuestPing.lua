@@ -1,9 +1,9 @@
 -- QuestPing/QuestPing.lua
 -- The button: shown while a quest mob you still need has a nameplate up (or always, or never: the "button"
--- setting). Each press (a click, the key binding or "/click QuestPingButton") pings the next mob not pinged yet
--- and says its name in party or raid chat; once every one is pinged, presses only target. Mobs already in a
--- fight (with you or anyone) are never pinged or called out. A bouncing arrow sits over the nameplate of the
--- next mob a press will ping.
+-- setting). Each press (a click, the key binding or "/click QuestPingButton") targets, marks and pings the next
+-- mob not pinged yet; with none in view it looks for the ones too far for a nameplate by name. Once every one is
+-- pinged, presses only target. Mobs already in a fight (with you or anyone) are never pinged. A bouncing arrow
+-- sits over the nameplate of the mob you pressed for, while it's your target.
 --
 -- TargetUnit and C_Ping.SendMacroPing are protected, so this is a SecureActionButton running macros the addon
 -- writes (Logic.lua's QP.Steps): one per press, stored as qp-macro1..n. A secure snippet wrapped around the
@@ -180,7 +180,7 @@ local function markFree(units)
     end
 end
 
-local function applySteps(steps)
+local function applySteps(steps, near)
     for i = 1, stepCount do
         button:SetAttribute("qp-macro" .. i, nil)
     end
@@ -197,10 +197,11 @@ local function applySteps(steps)
     button:SetAttribute("qp-step", 1)
     button:SetAttribute("type", steps and "macro" or nil)
     button:SetAttribute("macrotext", steps and steps[1].text or nil)
-    -- "near" (default): only while there's a mob to press for. "always": also idle, dimmed, so you can find,
-    -- move and click it. "never": key binding only (a hidden button still takes its binding's clicks).
+    -- "near" (default): only while a mob is in view (the key also reaches far ones). "always": also idle,
+    -- dimmed, so you can find, move and click it. "never": key binding only (a hidden button still takes its
+    -- binding's clicks).
     local mode = QuestPingDB.button
-    if mode == "always" or (mode ~= "never" and steps) then
+    if mode == "always" or (mode ~= "never" and near) then
         button:Show()
     else
         button:Hide()
@@ -216,14 +217,19 @@ local function refresh()
         hunt = QP.Hunt(QuestPingDB.sources ~= false, ns.PartyNeeds and ns.PartyNeeds() or nil)
         wanted, wantedDirty, ticks = QP.WantedNames(hunt), false, 0
     end
-    local units, names = QP.Candidates(wanted, plates, tonumber(QuestPingDB.range),
-        QuestPingDB.party ~= false and partyNeeds or nil)
+    local range = tonumber(QuestPingDB.range)
+    local units, names = QP.Candidates(wanted, plates, range, QuestPingDB.party ~= false and partyNeeds or nil)
     candidates = units
+    -- Far mobs (no nameplate) are looked for by name, which drops your target first: not while it's a quest
+    -- mob you need, and not with a Range set (a far mob is out of it by definition).
+    local first = units[1]
+    local onQuestMob = first and (first == "target" or readable(UnitIsUnit(first, "target"))) and true or false
+    local far = (not range or range == 0) and not onQuestMob and QP.FarNames(hunt, plates) or {}
     local quiet = quietUnits(units)
     local icons = iconsInView()
     local raidMarks = QP.PickMarks(units, quiet, icons, tonumber(QuestPingDB.chatIcon) or 8)
 
-    local nextUnit, nextName
+    local nextUnit, nextName, pressedFor
     local sig = {}
     shown = {}
     for i, unit in ipairs(units) do
@@ -233,22 +239,26 @@ local function refresh()
         end
         sig[i] = unit .. (quiet[unit] and "*" or "") .. ":" .. (raidMarks[unit] or "")
     end
-    button.Label:SetText(nextName or names[1] or "")
+    -- The mob a press got: your target, if it's one you need and QuestPing pinged it.
+    if onQuestMob and pingedAt[pingKey(first)] then
+        pressedFor = first
+    end
+    button.Label:SetText(nextName or names[1] or far[1] or "")
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
     button:SetAlpha(#units > 0 and 1 or 0.5)
-    pointArrowAt(nextUnit)
+    pointArrowAt(pressedFor)
     markFree(units)
     ns.state.hunt, ns.state.shown = hunt, shown
     for _, fn in ipairs(ns.listeners) do
         fn()
     end
 
-    sig = table.concat(sig, ",")
+    sig = table.concat(sig, ",") .. "|" .. table.concat(far, ",")
     if sig == appliedSig or InCombatLockdown() then
         return
     end
-    applySteps(QP.Steps(units, quiet, raidMarks, names))
+    applySteps(QP.Steps(units, quiet, raidMarks, names, far), #units > 0)
     appliedSig = sig
 end
 
@@ -276,6 +286,7 @@ local function afterClick()
     pressing = false
     presses, lastRan = presses + 1, running.text
     if running.pings then
+        refresh() -- the candidates as they are now: a far mob the press found counts as "target" only now
         for _, unit in ipairs(candidates) do
             if UnitExists(unit) and readable(UnitIsUnit(unit, "target")) and not UnitIsDead(unit) then
                 local key = pingKey(unit)
@@ -516,7 +527,10 @@ function handlers.PLAYER_REGEN_ENABLED()
     refresh()
 end
 
-handlers.PLAYER_TARGET_CHANGED = refresh
+function handlers.PLAYER_TARGET_CHANGED()
+    tooltipAt.target = nil -- the "target" unit is someone else now
+    refresh()
+end
 handlers.RAID_TARGET_UPDATE = refresh -- an icon went on or came off: the next mob gets the next free one
 
 function handlers.UPDATE_BINDINGS()

@@ -1,8 +1,8 @@
 -- QuestPing/Guide.lua
--- The guide arrow: when no mob you still need is in view, an arrow near the top of the screen turns to point at
--- the nearest place one spawns (Polestar's or Questie's database), with its name and distance. It steps aside
--- once a needed mob's nameplate is up (the bouncing arrow over the nameplate takes over), in instances, and
--- where the game gives no position or facing. Shift-drag moves it; Options > AddOns > QuestPing turns it off.
+-- The spawn guide arrow (off unless turned on): when no mob you still need is in view, an arrow near the top of
+-- the screen turns to point at the nearest place one spawns (Polestar's or Questie's database), with its name and
+-- distance. It steps aside once a needed mob is in view, in instances, and where the game gives no position or
+-- facing. Shift-drag moves it; Options > AddOns > QuestPing turns it on.
 --
 -- A spawn you've been to with none of its mobs alive in view (you killed them, or someone else has them) is
 -- empty, so the arrow skips it until it respawns and points at the next one instead.
@@ -71,7 +71,7 @@ end
 
 -- Every PICK_EVERY: decide whether the arrow shows, and at what.
 local function choose()
-    if QuestPingDB.guide == false or (IsInInstance and IsInInstance()) or anyInView() then
+    if QuestPingDB.spawnArrow ~= true or (IsInInstance and IsInInstance()) or anyInView() then
         return hide()
     end
     if not pos.continent then

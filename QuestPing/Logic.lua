@@ -329,20 +329,21 @@ function QP.TooltipNeeds(unit)
     return false
 end
 
---- The nameplate units worth targeting, in plates order with the current target first, and their names.
--- A unit counts when its name is wanted, or when needed(unit) says so (the tooltip check, for mobs only your
--- party still needs). range, if set, is the most yards away a mob may be (Options' "Range").
+--- The units worth targeting, in plates order with the current target first, and their names. A unit counts
+-- when its name is wanted, or when needed(unit) says so (the tooltip check, for mobs only your party still
+-- needs). range, if set, is the most yards away a mob may be (Options' "Range"). The target counts too when it
+-- has no nameplate (a mob a press took by name beyond nameplate range), as the unit "target".
 function QP.Candidates(wanted, plates, range, needed)
     local units, names = {}, {}
     if next(wanted) == nil and not needed then
         return units, names
     end
-    for _, unit in ipairs(plates) do
+    local function take(unit, first)
         if UnitExists(unit) and UnitCanAttack("player", unit) and not UnitIsDead(unit)
             and not UnitIsTapDenied(unit) and QP.InRange(unit, range) then
             local name = readable((UnitName(unit)))
             if name and (QP.Matches(wanted, name) or (needed and needed(unit))) then
-                if readable(UnitIsUnit(unit, "target")) then
+                if first then
                     table.insert(units, 1, unit)
                     table.insert(names, 1, name)
                 else
@@ -352,7 +353,47 @@ function QP.Candidates(wanted, plates, range, needed)
             end
         end
     end
+    local targetPlated = false
+    for _, unit in ipairs(plates) do
+        local isTarget = UnitExists(unit) and readable(UnitIsUnit(unit, "target")) and true or false
+        targetPlated = targetPlated or isTarget
+        take(unit, isTarget)
+    end
+    if not targetPlated then
+        take("target", true)
+    end
     return units, names
+end
+
+--- The wanted mob names with no unit of that name in view (on a nameplate or as the target), in hunt order:
+-- the mobs too far for a nameplate. A press can still take one by name (/targetexact reaches as far as you
+-- can see a mob), but nothing tells QuestPing whether it's tapped or fighting until it's targeted.
+function QP.FarNames(hunt, plates)
+    local inView = {}
+    local function look(unit)
+        local name = UnitExists(unit) and readable((UnitName(unit)))
+        if name then
+            inView[name], inView[name .. "s"], inView[name .. "es"] = true, true, true
+        end
+    end
+    for _, unit in ipairs(plates) do
+        look(unit)
+    end
+    look("target")
+    local far, listed = {}, {}
+    for _, quest in ipairs(hunt) do
+        for _, o in ipairs(quest.objectives) do
+            if not o.finished then
+                for _, name in ipairs(o.names) do
+                    if not (inView[name] or listed[name]) then
+                        listed[name] = true
+                        far[#far + 1] = name
+                    end
+                end
+            end
+        end
+    end
+    return far
 end
 
 --- Whether a mob is worth calling out: not already fighting you or anyone else. A secret answer counts as
@@ -362,29 +403,48 @@ function QP.Fresh(unit)
 end
 
 --- What each press of the button does, in order: one step per mob to ping (every unit not in quiet, which
--- maps unit -> true for mobs pinged already or already in a fight), then a last step that only targets
--- and repeats on every press after it. Nil for no units. Each step is { text = macro, ping = unit or nil };
--- names are the units' names (QP.Candidates) and marks (QP.PickMarks) maps a unit to the raid icon its step
--- puts on it.
+-- maps unit -> true for mobs pinged already or already in a fight), then one step for the far mobs (far, from
+-- QP.FarNames), then a last step that only targets and repeats on every press after it. Nil for nothing to
+-- target. Each step is { text = macro, ping = unit, or true for the far step }; names are the units' names
+-- (QP.Candidates) and marks (QP.PickMarks) maps a unit to the raid icon its step puts on it.
 --
 -- A step clears a dead target, targets its mob by name, marks it and pings the target. Forever's /target and
 -- /ping do nothing with a nameplate unit (/target [@nameplate1] and /ping [@nameplate3] 1 run silently in
 -- game), while /targetexact by name does work: it takes the nearest mob of that name, so a step can't pick
--- which of several same-named mobs it gets, and a dead one is cleared again. "/tm ~8" marks only a mob with no
--- raid icon yet, so a press never takes one off. In combat while you have a live hostile target, a step stops
--- before targeting, so spamming the key mid-fight never pulls you off the mob you're hitting (and pings
--- nothing). A mob whose name a macro line can't carry gets no step.
+-- which of several same-named mobs it gets, and a dead one is cleared again. The step for a target that has
+-- no nameplate keeps it rather than look it up again. "/tm ~8" marks only a mob with no raid icon yet, so a
+-- press never takes one off. The far step drops your target and tries each far name in turn until one is
+-- found, then pings it unmarked: a mob beyond nameplate range might be tapped, which shows only once it's
+-- targeted. In combat while you have a live hostile target, a step stops before targeting, so spamming the
+-- key mid-fight never pulls you off the mob you're hitting (and pings nothing). A mob whose name a macro line
+-- can't carry gets no step.
 local KEEP_TARGET = "/stopmacro [combat,harm,nodead]\n"
 local PING_TARGET = "/ping [@target,harm,nodead] 1"
+local MACRO_LIMIT = 255
 
 local function usable(name)
     return type(name) == "string" and name ~= "" and #name <= QP.MAX_NAME and not name:find("[%c%[%];]")
 end
 
-function QP.Steps(units, quiet, marks, names)
-    if #units == 0 then
+local function farStep(far)
+    local head = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/cleartarget\n"
+    local lines, size = {}, #head + #PING_TARGET
+    for _, name in ipairs(far or {}) do
+        if usable(name) then
+            local line = "/targetexact " .. (#lines > 0 and "[noexists] " or "") .. name .. "\n/cleartarget [dead]\n"
+            if size + #line > MACRO_LIMIT then
+                break
+            end
+            lines[#lines + 1], size = line, size + #line
+        end
+    end
+    if #lines == 0 then
         return nil
     end
+    return { text = head .. table.concat(lines) .. PING_TARGET, ping = true }
+end
+
+function QP.Steps(units, quiet, marks, names, far)
     marks, names = marks or {}, names or {}
     local steps, first = {}, nil
     for i, unit in ipairs(units) do
@@ -394,19 +454,22 @@ function QP.Steps(units, quiet, marks, names)
             if not quiet[unit] and #steps < QP.MAX_PINGS then
                 local mark = marks[unit]
                 steps[#steps + 1] = {
-                    text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact " .. name
-                        .. "\n/cleartarget [dead]\n"
+                    text = "/cleartarget [dead]\n" .. KEEP_TARGET
+                        .. (unit == "target" and "" or ("/targetexact " .. name .. "\n/cleartarget [dead]\n"))
                         .. (mark and ("/tm [@target,harm,nodead] ~" .. mark .. "\n") or "") .. PING_TARGET,
                     ping = unit,
                 }
             end
         end
     end
-    if not first then
-        return nil
+    local seek = farStep(far)
+    if seek then
+        steps[#steps + 1] = seek
     end
-    steps[#steps + 1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. first }
-    return steps
+    if first then
+        steps[#steps + 1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. first }
+    end
+    return #steps > 0 and steps or nil
 end
 
 QP.MARK_ORDER = { 8, 7, 6, 5, 4, 3, 2, 1 } -- skull, cross, square, moon, triangle, diamond, circle, star

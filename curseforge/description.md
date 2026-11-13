@@ -16,13 +16,14 @@ It replaces this macro, which you would otherwise edit for every quest:
 - The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own.
 - Marks the mob with a raid icon: the skull first, then the cross, then the square and so on for each other mob. It skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
 - Pings each mob once, so you can press the key as often as you like. Once every mob is pinged, a press only targets.
-- The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows.
+- Reaches mobs too far for a nameplate. You can see a mob's name well past 45 yards, but the game tells addons nothing about it. So when you have no quest mob targeted, a press drops your target, looks for each far mob by name and pings the one it finds. It doesn't mark it, since QuestPing can't tell whether a far mob is tapped or in a fight until it's targeted.
+- The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows. With a Range set, far mobs are out of it.
 
-A bouncing arrow sits over the nameplate of the mob the next press will ping. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
+A bouncing arrow sits over the nameplate of the mob a press marked, while it's your target. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
 
-## Guide arrow
+## Spawn guide arrow
 
-When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one spawns, with its name and distance. Walk where it points. Once a needed mob's nameplate comes up, the bouncing arrow over it takes over. If you reach a spawn and none of its mobs are alive, the arrow skips that spawn for 5 minutes and points at the next one. The guide arrow needs Polestar or Questie, since their quest databases know where mobs spawn. It hides in instances.
+This one is off unless you turn it on, since it can only guess. When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one spawns, with its name and distance. If you reach a spawn and none of its mobs are alive, the arrow skips that spawn for 5 minutes and points at the next one. It needs Polestar or Questie, since their quest databases know where mobs spawn, and a spawn may be empty. It hides in instances.
 
 ## Mobs it finds
 
@@ -34,7 +35,7 @@ A mob counts as near when its enemy nameplate shows, which the game does up to 4
 
 ## Integrations
 
-- Polestar: if you use Polestar, QuestPing reads its quest database. That adds the mobs that drop quest items, such as "2/6 Troll Tusk", and the mobs that count toward a kill line with a group name, such as "Gnolls slain". It also gives the guide arrow its spawn places.
+- Polestar: if you use Polestar, QuestPing reads its quest database. That adds the mobs that drop quest items, such as "2/6 Troll Tusk", and the mobs that count toward a kill line with a group name, such as "Gnolls slain". It also gives the spawn guide arrow its spawn places.
 - Questie: if you use Questie, QuestPing reads its database the same way. With both installed, Polestar is asked first.
 - Minimap: QuestPing shows in the game's minimap addon list and has its own minimap button. The button uses LibDBIcon, so minimap button collectors pick it up.
 
@@ -49,7 +50,7 @@ The settings are in Options > AddOns > QuestPing. You can:
 - pick the raid icon for marking, or none
 - turn the nameplate arrow on or off
 - turn the quest icons on or off
-- turn the guide arrow on or off
+- turn the spawn guide arrow on or off
 - turn the quest databases on or off
 - set how far away a mob may be
 - turn enemy nameplates on or off
@@ -65,6 +66,7 @@ To keep the button on an action bar, make a macro with `/click QuestPingButton`.
 
 ## Limits
 
+- Addons can't ping on their own. The game only targets and pings from a key press or a click.
 - The game does not let addons change the button during combat, and a press never pulls you off a live target. In a fight, a press pings only while you have no live target. The mobs it skips get their pings when the fight ends.
 - The button acts when you release the key, so each press counts once.
-- The guide arrow points at spawn places from the quest database, not at a live mob. The game tells addons where a mob is only once its nameplate is on screen.
+- The game tells addons about an enemy only through its nameplate or your target. So no arrow can point at a far mob, and the spawn guide arrow points at spawn places from the quest database, not at a live mob.

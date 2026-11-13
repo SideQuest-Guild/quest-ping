@@ -24,18 +24,22 @@ It replaces a macro like this, without editing it for every quest:
   other mob, skipping icons already on someone in view. A mob that already wears an icon keeps it. In a raid
   only the leader and assistants can mark.
 - Once every mob in view is pinged, presses only target, so spamming is safe.
+- **Far mobs:** with no quest mob targeted, a press also looks for the ones too far for a nameplate (you can see
+  their names past 45 yards, but the game gives addons nothing about them). It drops your target and tries each
+  far name in turn with `/targetexact`, then pings what it found, unmarked: QuestPing can't tell a far mob is
+  tapped or in a fight until it's targeted. The ping button stays hidden for far mobs; the key works anyway.
 - **Range** in the settings limits how far away a mob may be (8 to 48 yards, or any nameplate, the default).
-- A **bouncing arrow** sits over the nameplate of the mob the next press will ping, and a **quest icon** sits
-  beside every needed mob nobody has (not tapped, not in a fight).
+  With a Range set, far mobs are out of it.
+- A **bouncing arrow** sits over the nameplate of the mob a press marked, while it's your target, and a
+  **quest icon** sits beside every needed mob nobody has (not tapped, not in a fight).
 
-## Guide arrow
+## Spawn guide arrow
 
-When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one
-spawns, with its name and distance. Walk where it points; once a needed mob's nameplate comes up, the bouncing
-arrow over it takes over. The spawn places come from Polestar's or Questie's quest database, so the guide arrow
-needs one of them. A spawn you reach with none of its mobs alive in view (you killed them, or someone else has
-them) is skipped for 5 minutes while it respawns, so the arrow moves on to the next one. It hides in instances.
-Shift-drag moves it.
+Off unless you turn it on in the settings, since it can only guess. When no mob you still need is in view, an
+arrow near the top of the screen points at the nearest place one spawns, with its name and distance. The spawn
+places come from Polestar's or Questie's quest database, so it needs one of them, and a spawn may be empty. A
+spawn you reach with none of its mobs alive in view is skipped for 5 minutes while it respawns. It hides in
+instances. Shift-drag moves it.
 
 ## Which mobs
 
@@ -69,8 +73,8 @@ Shift-drag moves it.
   the right with a progress bar, each objective, which mobs count for it and how many are near.
 - **Settings** are under **Options > AddOns > QuestPing** (or the window's Settings button, or
   `/questping options`): which raid icon a press marks with (or none), the nameplate arrow, the quest
-  icons, the guide arrow, the range, using quest databases, enemy nameplates, the ping button, the minimap button, and
-  putting things back where they start.
+  icons, the spawn guide arrow, the range, using quest databases, enemy nameplates, the ping button, the minimap
+  button, and putting things back where they start.
 - `/questping status` prints what you're hunting and what's near in chat.
 
 ## In combat
@@ -78,6 +82,13 @@ Shift-drag moves it.
 The game only lets an addon rewrite the button out of combat, and a press never pulls you off a live target in a
 fight. So in a fight a press pings only while you have no live target; the mobs it skips get their pings when the
 fight ends.
+
+## What no addon can do
+
+- **Ping on its own.** Targeting and pinging are protected: the game runs them only from a key press or a click.
+- **See mobs past nameplate range.** The game tells addons about an enemy only through its nameplate (45 yards
+  at most) or your target, so QuestPing can't know a far mob's spot, health or tap, and no arrow can point at
+  one.
 
 ## Install
 

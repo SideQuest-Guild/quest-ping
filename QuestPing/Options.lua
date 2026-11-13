@@ -73,15 +73,16 @@ local function register()
         .. "(skull, cross, square...) for each other mob. Never takes an icon off a mob. In a raid only the leader "
         .. "and assistants can mark. No icon: no marking.")
     Settings.SetOnValueChangedCallback("QUESTPING_CHATICON", ns.Refresh)
-    checkbox("arrow", "Arrow over the next mob", true,
-        "A bouncing arrow over the nameplate of the mob the next press will ping.")
+    checkbox("arrow", "Arrow over your mob", true,
+        "A bouncing arrow over the nameplate of the mob a press targeted and marked, while it's your target.")
     checkbox("marks", "Mark free quest mobs", true,
         "A quest icon beside the nameplate of every mob you still need that nobody has: not tapped by someone "
             .. "else and not in a fight.")
-    checkbox("guide", "Guide arrow", true,
+    checkbox("spawnArrow", "Spawn guide arrow", false,
         "When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one "
-            .. "spawns, with its distance. Needs Polestar's or Questie's quest database. Shift-drag to move it.")
-    Settings.SetOnValueChangedCallback("QUESTPING_GUIDE", function()
+            .. "spawns, with its distance. It's a guess from Polestar's or Questie's quest database: the spawn may "
+            .. "be empty. Shift-drag to move it.")
+    Settings.SetOnValueChangedCallback("QUESTPING_SPAWNARROW", function()
         if ns.UpdateGuide then
             ns.UpdateGuide()
         end
