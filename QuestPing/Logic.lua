@@ -370,8 +370,10 @@ end
 -- the game has loaded around you, past the nameplates and out of sight, as Polestar's target button does; but
 -- nothing tells QuestPing whether it's tapped or fighting until it's targeted. Names whose spawns no source
 -- knows, or are on another continent, come last. Names with a nameplate up count too: a tapped one in view
--- doesn't mean a free one isn't farther out.
-function QP.FarNames(hunt, continent, px, py, reach)
+-- doesn't mean a free one isn't farther out. groupOn(questID), if given, says someone in your group is on a
+-- quest: its objectives you're done with count too, since they may still need them (the game's tooltip on
+-- the mob tells once it's targeted).
+function QP.FarNames(hunt, continent, px, py, reach, groupOn)
     local best, order = {}, {}
     local close = false
     local function add(name, dist)
@@ -385,7 +387,7 @@ function QP.FarNames(hunt, continent, px, py, reach)
     local reachSq = reach * reach
     for _, quest in ipairs(hunt) do
         for _, o in ipairs(quest.objectives) do
-            if not o.finished then
+            if not o.finished or (groupOn and groupOn(quest.questID)) then
                 for _, p in ipairs(QP.SpawnPoints(quest.questID, o.index) or {}) do
                     if continent and p.continent == continent and p.name then
                         local dx, dy = p.x - px, p.y - py

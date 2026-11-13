@@ -213,13 +213,43 @@ local FAR_REACH = 300 -- yards: with a needed mob spawning this close, the butto
 -- whether it has come back around to one, so the next press tries the other names first (QP.Steps' moveOn).
 local cycle = { name = nil, seen = {}, moveOn = false }
 
--- Your target's name when it's a mob you're hunting, in any state (tapped, pinged, fighting).
+-- Your target's name when it's a mob you're hunting, in any state (tapped, pinged, fighting), or one only
+-- your party still needs.
 local function huntedTargetName()
     if not (UnitExists("target") and UnitCanAttack("player", "target")) then
         return nil
     end
     local name = readable((UnitName("target")))
-    return name and QP.Matches(wanted, name) and name or nil
+    local party = QuestPingDB.party ~= false and partyNeeds("target")
+    return name and (QP.Matches(wanted, name) or party) and name or nil
+end
+
+-- Whether someone in your group is on a quest (C_QuestLog.IsUnitOnQuest), kept a few seconds per quest.
+local GROUP_FOR = 5 -- seconds
+local groupAt, groupSays = {}, {}
+
+local function groupOn(questID)
+    if QuestPingDB.party == false or not (IsInGroup() and C_QuestLog.IsUnitOnQuest) then
+        return false
+    end
+    local now = GetTime()
+    if groupAt[questID] and now - groupAt[questID] <= GROUP_FOR then
+        return groupSays[questID]
+    end
+    local on = false
+    local raid = IsInRaid()
+    for i = 1, raid and GetNumGroupMembers() or GetNumSubgroupMembers() do
+        local unit = (raid and "raid" or "party") .. i
+        if UnitExists(unit) and not readable(UnitIsUnit(unit, "player")) then
+            local ok, yes = pcall(C_QuestLog.IsUnitOnQuest, unit, questID)
+            if ok and readable(yes) then
+                on = true
+                break
+            end
+        end
+    end
+    groupAt[questID], groupSays[questID] = now, on
+    return on
 end
 
 local function refresh()
@@ -242,7 +272,7 @@ local function refresh()
     local far, close = {}, false
     if not range or range == 0 then
         local continent, px, py = ns.PlayerWorldPosition()
-        far, close = QP.FarNames(hunt, continent, px, py, FAR_REACH)
+        far, close = QP.FarNames(hunt, continent, px, py, FAR_REACH, groupOn)
     end
     local targetName = huntedTargetName()
     local quiet = quietUnits(units)

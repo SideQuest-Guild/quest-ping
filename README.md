@@ -57,6 +57,8 @@ instances. Shift-drag moves it.
 - **For your party:** a mob stays wanted while someone in your group still needs it, even after you're done.
   The game's own tooltip on a mob lists every party member on its quest with their count ("Aewie Booty 5/8
   Tumbled Crystal"), and QuestPing reads that, so it works with no addon on their side and covers drop items
+  too. Far mobs count as well: while someone in your group is on the quest, a press still looks for its mobs
+  by name after you're done, and pings the one it finds once its tooltip shows someone short.
   too. QuestPing users in the group also share what they still need in hidden addon messages (party or raid
   only), and Polestar's party sync counts when it's on; those show in the hunt window ("For Ana"). "Hunt for
   your party too" in the settings turns all of this off.

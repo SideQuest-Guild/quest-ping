@@ -489,6 +489,7 @@ local function setTarget(unit)
         world.lastTarget = target
     end
     if unit then world.units[unit].target = true end
+    fire("PLAYER_TARGET_CHANGED") -- the game fires it mid-macro, as the target changes
 end
 
 local function nearness(unit)
@@ -886,6 +887,35 @@ test("a mob whose tooltip shows someone in the group short on its quest counts, 
     ns.Refresh()
     eq(#ns.state.shown, 0, "Hunt for your party too: off")
     QuestPingDB.party, C_TooltipInfo = nil, nil
+    clearPlates()
+end)
+
+test("a far mob you're done with is still looked for while someone in your group is on the quest", function()
+    clearPlates()
+    world.quests = { { id = 6, objectives = { kill(MYSTIC, 10, 10) } } }
+    world.group = "party"
+    world.units.party1 = { name = "Ana", friendly = true }
+    local onQuest = true
+    C_QuestLog.IsUnitOnQuest = function(unit, questID) return unit == "party1" and questID == 6 and onQuest end
+    C_TooltipInfo = { GetUnit = function(unit)
+        local u = UnitExists(unit) and U(unit)
+        return u and u.tooltip and { lines = u.tooltip } or nil
+    end }
+    fire("QUEST_LOG_UPDATE")
+    world.units.far7 = { name = MYSTIC, tooltip = { { type = 8, leftText = "5/10 Skullsplitter Mystic slain" } } }
+    eq(press(), nil, "found by name")
+    eq(currentTarget(), "far7")
+    eq(press(), "far7", "its tooltip shows Ana still short: pinged")
+
+    clearPlates()
+    world.units.party1 = { name = "Ana", friendly = true }
+    onQuest = false
+    world.now = world.now + 10 -- past the group check's few seconds
+    world.units.far8 = { name = MYSTIC }
+    fire("QUEST_LOG_UPDATE")
+    eq(press(), nil)
+    eq(currentTarget(), nil, "nobody in the group is on it: not looked for")
+    C_QuestLog.IsUnitOnQuest, C_TooltipInfo, world.group = nil, nil, nil
     clearPlates()
 end)
 

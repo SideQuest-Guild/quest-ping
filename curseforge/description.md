@@ -31,7 +31,7 @@ This one is off unless you turn it on, since it can only guess. When no mob you 
 
 QuestPing reads your quest log and hunts every kill objective you have not finished, such as "3/10 Skullsplitter Mystic slain". New quests count as soon as you take them.
 
-It also hunts for your party. If you have finished an objective but someone in your group still needs it, QuestPing keeps hunting those mobs. It reads the game's own tooltip on each mob, which lists every party member on the quest with their count, so nobody else needs the addon. Party members who run QuestPing or Polestar also share their progress for the hunt window.
+It also hunts for your party. If you have finished an objective but someone in your group still needs it, QuestPing keeps hunting those mobs, far ones included. It reads the game's own tooltip on each mob, which lists every party member on the quest with their count, so nobody else needs the addon. Party members who run QuestPing or Polestar also share their progress for the hunt window.
 
 A mob counts as near when its enemy nameplate shows, which the game does up to 45 yards away. QuestPing skips mobs that are dead, friendly, tapped by another player or already in a fight.
 
