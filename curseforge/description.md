@@ -12,10 +12,10 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 ## Each press
 
-- Pings the next mob you have not pinged yet with the Attack ping. Your target stays on the mob you are fighting.
+- Targets the next mob you have not pinged yet and pings it with the Attack ping. The game only makes a ping on your target, so the press has to target the mob.
 - Says "Skullsplitter Mystic here" in party chat, with a raid icon in front. In a raid it uses raid chat. Alone, it says nothing.
-- Targets a quest mob if you have no live target.
-- Pings and names each mob once, so you can press the key as often as you like.
+- Pings and names each mob once, so you can press the key as often as you like. Once every mob is pinged, a press only targets.
+- The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows.
 
 A bouncing arrow sits over the nameplate of the mob the next press will ping. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
 
@@ -49,6 +49,7 @@ The settings are in Options > AddOns > QuestPing. You can:
 - turn the quest icons on or off
 - turn the guide arrow on or off
 - turn the quest databases on or off
+- set how far away a mob may be
 - turn enemy nameplates on or off
 - show or hide the minimap button
 - show the ping button when a quest mob is near, always, or never
@@ -62,6 +63,6 @@ To keep the button on an action bar, make a macro with `/click QuestPingButton`.
 
 ## Limits
 
-- The game does not let addons change the button during combat. In a fight, presses work through the mobs that were near when the fight started. New mobs join when it ends.
+- The game does not let addons change the button during combat, and a press never pulls you off a live target. In a fight, a press pings only while you have no live target. The mobs it skips get their pings when the fight ends.
 - The button acts when you release the key, so each press counts once.
 - The guide arrow points at spawn places from the quest database, not at a live mob. The game tells addons where a mob is only once its nameplate is on screen.

@@ -228,15 +228,31 @@ function QP.Matches(wanted, name)
     return (wanted[name] or wanted[name .. "s"] or wanted[name .. "es"]) and true or false
 end
 
+-- Items whose use range tells how far a hostile unit is (C_Item.IsItemInRange works on hostile units, in combat
+-- too). The yards and items are the ones DBM's range check calibrated on Forever (DBM-RangeCheck.lua).
+QP.RANGE_ITEMS = { [8] = 8149, [13] = 17626, [23] = 17757, [28] = 13289, [33] = 17202, [38] = 18904, [48] = 221316 }
+
+--- Whether unit is within yards (a key of QP.RANGE_ITEMS). No limit, an unknown limit, or an item the game
+-- hasn't loaded yet all count as in range, so a mob is never dropped on a guess.
+function QP.InRange(unit, yards)
+    local item = yards and QP.RANGE_ITEMS[yards]
+    if not (item and C_Item and C_Item.IsItemInRange) then
+        return true
+    end
+    local ok, inRange = pcall(C_Item.IsItemInRange, item, unit)
+    return not (ok and readable(inRange) == false)
+end
+
 --- The nameplate units worth targeting, in plates order with the current target first, and their names.
-function QP.Candidates(wanted, plates)
+-- range, if set, is the most yards away a mob may be (Options' "Range").
+function QP.Candidates(wanted, plates, range)
     local units, names = {}, {}
     if next(wanted) == nil then
         return units, names
     end
     for _, unit in ipairs(plates) do
         if UnitExists(unit) and UnitCanAttack("player", unit) and not UnitIsDead(unit)
-            and not UnitIsTapDenied(unit) then
+            and not UnitIsTapDenied(unit) and QP.InRange(unit, range) then
             local name = readable((UnitName(unit)))
             if name and QP.Matches(wanted, name) then
                 if readable(UnitIsUnit(unit, "target")) then
@@ -262,47 +278,41 @@ end
 -- maps unit -> true for mobs pinged already or already in a fight), then a last step that only targets
 -- and repeats on every press after it. Nil for no units. Each step is { text = macro, ping = unit or nil }.
 --
--- A step clears a dead target, pings its mob without targeting it, then targets the first unit still
--- hostile and alive, except in combat while you already have a live hostile target, so spamming the key
--- mid-fight never pulls you off the mob you're hitting. The conditions matter in combat, when the steps
--- can't be rewritten and a nameplate token may have moved to another mob.
+-- A step clears a dead target, targets its mob and pings the target: the game's /ping makes no ping for a
+-- nameplate unit (/ping [@nameplate3] 1 runs silently), only for one like @target. In combat while you have a
+-- live hostile target, a step stops before targeting, so spamming the key mid-fight never pulls you off the mob
+-- you're hitting (and pings nothing). The conditions matter in combat, when the steps can't be rewritten and a
+-- nameplate token may have moved to another mob.
+local KEEP_TARGET = "/stopmacro [combat,@target,harm,nodead]\n"
+local PING_TARGET = "/ping [@target,harm,nodead] 1"
+
 function QP.Steps(units, quiet)
     if #units == 0 then
         return nil
     end
-    local queue = {}
+    local steps = {}
     for _, unit in ipairs(units) do
-        if not quiet[unit] and #queue < QP.MAX_PINGS then
-            queue[#queue + 1] = unit
-        end
-    end
-    local longestPing = ""
-    for _, unit in ipairs(queue) do
-        local line = "/ping [@" .. unit .. ",harm,nodead] 1\n"
-        if #line > #longestPing then
-            longestPing = line
+        if not quiet[unit] and #steps < QP.MAX_PINGS then
+            steps[#steps + 1] = {
+                text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/target [@" .. unit .. ",harm,nodead]\n"
+                    .. PING_TARGET,
+                ping = unit,
+            }
         end
     end
     local n = math.min(#units, QP.MAX_UNITS)
-    local targeting
+    local last
     while n > 0 do
         local clauses = {}
         for i = 1, n do
             clauses[i] = "[@" .. units[i] .. ",harm,nodead]"
         end
-        targeting = "/stopmacro [combat,@target,harm,nodead]\n/target " .. table.concat(clauses)
-        if #("/cleartarget [dead]\n" .. longestPing .. targeting) <= QP.MACRO_LIMIT then
+        last = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/target " .. table.concat(clauses)
+        if #last <= QP.MACRO_LIMIT then
             break
         end
         n = n - 1
     end
-    local steps = {}
-    for _, unit in ipairs(queue) do
-        steps[#steps + 1] = {
-            text = "/cleartarget [dead]\n/ping [@" .. unit .. ",harm,nodead] 1\n" .. targeting,
-            ping = unit,
-        }
-    end
-    steps[#steps + 1] = { text = "/cleartarget [dead]\n" .. targeting }
+    steps[#steps + 1] = { text = last }
     return steps
 end

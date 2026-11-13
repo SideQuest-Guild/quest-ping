@@ -88,6 +88,18 @@ local function register()
     end)
 
     header("Finding mobs")
+    local rangeSetting = Settings.RegisterAddOnSetting(category, "QUESTPING_RANGE", "range", QuestPingDB,
+        Settings.VarType.Number, "Range", 0)
+    Settings.CreateDropdown(category, rangeSetting, function()
+        local options = Settings.CreateControlTextContainer()
+        options:Add(0, "Any nameplate (max)")
+        for _, yards in ipairs({ 48, 38, 33, 28, 23, 13, 8 }) do
+            options:Add(yards, yards .. " yards")
+        end
+        return options:GetData()
+    end, "How far away a quest mob may be and still count as near. Max is as far as the game shows enemy "
+        .. "nameplates. Closer keeps the button and pings on mobs you can reach soon.")
+    Settings.SetOnValueChangedCallback("QUESTPING_RANGE", ns.Refresh)
     checkbox("sources", "Use quest databases", true,
         "Read Polestar's or Questie's quest database, when one is installed, to also hunt the mobs that drop quest "
             .. "items (\"2/6 Troll Tusk\") and kill objectives named for a group (\"Gnolls slain\"), and to give the "

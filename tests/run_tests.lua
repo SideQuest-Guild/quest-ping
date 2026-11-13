@@ -243,10 +243,10 @@ test("one ping step per mob not quiet, then a target-only step; all under the le
     eq(steps[1].ping, "nameplate8")
     eq(steps[2].ping, "nameplate7", "quiet mob skipped")
     eq(steps[3].ping, nil)
-    local targeting = "/stopmacro [combat,@target,harm,nodead]\n"
-        .. "/target [@nameplate8,harm,nodead][@nameplate6,harm,nodead][@nameplate7,harm,nodead]"
-    eq(steps[1].text, "/cleartarget [dead]\n/ping [@nameplate8,harm,nodead] 1\n" .. targeting)
-    eq(steps[3].text, "/cleartarget [dead]\n" .. targeting)
+    local keep = "/cleartarget [dead]\n/stopmacro [combat,@target,harm,nodead]\n"
+    eq(steps[1].text, keep .. "/target [@nameplate8,harm,nodead]\n/ping [@target,harm,nodead] 1",
+        "target the mob, then ping the target")
+    eq(steps[3].text, keep .. "/target [@nameplate8,harm,nodead][@nameplate6,harm,nodead][@nameplate7,harm,nodead]")
 
     local many = {}
     for i = 11, 40 do many[#many + 1] = "nameplate" .. i end
@@ -254,8 +254,8 @@ test("one ping step per mob not quiet, then a target-only step; all under the le
     eq(#steps, QP.MAX_PINGS + 1)
     for _, s in ipairs(steps) do
         assert(#s.text <= QP.MACRO_LIMIT, "length " .. #s.text)
-        assert(s.text:find("/target [@nameplate11,", 1, true), "keeps the first plate")
     end
+    assert(steps[#steps].text:find("/target [@nameplate11,", 1, true), "the last step keeps the first plate")
 end)
 
 ---------------------------------------------------------------------------
@@ -355,13 +355,47 @@ assert(loadfile("QuestPing/Guide.lua"))("QuestPing", ns)
 local guideClock, guideEvents = created[#created - 1], created[#created]
 guideEvents.scripts.OnEvent(guideEvents, "PLAYER_LOGIN")
 
--- A press: the secure snippet (which may set attributes in combat, like the real restricted environment),
--- then the macro it picked, then PostClick. Returns the mob the macro pinged, or nil.
+-- A press: PreClick, the secure snippet (which may set attributes in combat, like the real restricted
+-- environment), the macro it picked run line by line the way the game would, then PostClick. Returns the mob
+-- the macro pinged, or nil. Like the game, /ping makes a ping only for @target.
+local function currentTarget()
+    for unit, u in pairs(world.units) do
+        if u.target then return unit end
+    end
+end
+
+local function liveHostile(unit)
+    local u = unit and world.units[unit]
+    return u and not u.dead and not u.friendly
+end
+
+local function runMacro(text)
+    for line in text:gmatch("[^\n]+") do
+        local target = currentTarget()
+        if line == "/cleartarget [dead]" then
+            if target and world.units[target].dead then world.units[target].target = nil end
+        elseif line == "/stopmacro [combat,@target,harm,nodead]" then
+            if world.combat and liveHostile(target) then return nil end
+        elseif line:match("^/target ") then
+            for unit in line:gmatch("%[@(nameplate%d+),harm,nodead%]") do
+                if liveHostile(unit) then
+                    if target then world.units[target].target = nil end
+                    world.units[unit].target = true
+                    break
+                end
+            end
+        elseif line == "/ping [@target,harm,nodead] 1" then
+            if liveHostile(target) then return target end
+        end
+    end
+end
+
 local function press()
     local handle = { GetAttribute = function(_, k) return b.attrs[k] end,
         SetAttribute = function(_, k, v) b.attrs[k] = v end }
+    b.scripts.PreClick(b)
     b.pre(handle)
-    local pinged = b.attrs.macrotext and b.attrs.macrotext:match("/ping %[@(nameplate%d+),")
+    local pinged = b.attrs.macrotext and runMacro(b.attrs.macrotext)
     b.scripts.PostClick(b)
     return pinged
 end
@@ -392,22 +426,23 @@ test("each press pings the next mob once, says it in party, then only targets", 
     eq(b.Label.text, "Skullsplitter Mystic")
 end)
 
-test("spamming in combat walks the steps from the pull, then they catch up after", function()
+test("in combat a press never pulls you off a live target; the rest wait for the fight to end", function()
     world.chat = {}
     world.group = "raid"
+    local t = currentTarget()
+    if t then world.units[t].target = nil end
     near("nameplate9", { name = "Skullsplitter Mystic" })
     near("nameplate10", { name = "Skullsplitter Mystic" })
     world.combat = true
-    eq(press(), "nameplate9")
-    world.units.nameplate10.fighting = true -- pulled by someone else after the pull's steps were written
-    eq(press(), "nameplate10", "the step was written before the pull")
-    eq(press(), nil)
-    eq(table.concat(world.chat, "|"), "RAID: {rt8} Skullsplitter Mystic here", "no call-out for a mob in a fight")
+    eq(press(), "nameplate9", "no live target yet: it targets and pings")
+    eq(press(), nil, "on a live target now: the press stops there")
+    eq(currentTarget(), "nameplate9")
+    eq(table.concat(world.chat, "|"), "RAID: {rt8} Skullsplitter Mystic here", "the stopped press counts nothing")
 
-    world.units.nameplate10.fighting = false
     world.combat = false
     fire("PLAYER_REGEN_ENABLED")
-    eq(press(), nil, "both counted as pinged")
+    eq(press(), "nameplate10", "after the fight it gets its ping")
+    eq(press(), nil, "both pinged")
 end)
 
 test("pings wear off, and a mob that leaves and comes back stays pinged", function()
@@ -520,6 +555,31 @@ test("free quest mobs get a quest icon on their nameplate; ones in a fight don't
     clearPlates()
     ns.Refresh()
     eq(marked(), "", "gone with the plates")
+end)
+
+test("the range setting drops mobs farther than it; a range item the game hasn't loaded drops nothing", function()
+    clearPlates()
+    local yardsOf = {}
+    for yards, item in pairs(QP.RANGE_ITEMS) do yardsOf[item] = yards end
+    C_Item = { IsItemInRange = function(item, unit)
+        local yards = world.units[unit].yards
+        if yards == nil then return nil end
+        return yards <= yardsOf[item]
+    end }
+    near("nameplate30", { name = "Skullsplitter Mystic", yards = 20 })
+    near("nameplate31", { name = "Skullsplitter Mystic", yards = 40 })
+    QuestPingDB.range = 28
+    ns.Refresh()
+    eq(#ns.state.shown, 1, "only the one within 28 yards")
+    QuestPingDB.range = 0
+    ns.Refresh()
+    eq(#ns.state.shown, 2, "max: every nameplate")
+    QuestPingDB.range = 28
+    world.units.nameplate31.yards = nil
+    ns.Refresh()
+    eq(#ns.state.shown, 2, "no answer counts as in range")
+    QuestPingDB.range, C_Item = nil, nil
+    clearPlates()
 end)
 
 test("finishing the objective hides the button", function()

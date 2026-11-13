@@ -14,12 +14,12 @@ It replaces a macro like this, without editing it for every quest:
 
 ## What a press does
 
-- **Pings the next mob not pinged yet**, without pulling your target off it, and says "Skullsplitter Mystic here"
+- **Targets the next mob not pinged yet and pings it** with the Attack ping, and says "Skullsplitter Mystic here"
   in party chat with a raid icon in front (skull unless you pick another; raid chat in a raid; nothing when you're
-  alone). Each mob is pinged and called out once; it can be pinged again after 10 minutes.
-- **Targets** the first quest mob in view if you have no live target, or if you're targeting something that isn't
-  one. In a fight it never pulls you off a live target.
+  alone). Each mob is pinged and called out once; it can be pinged again after 10 minutes. The game's `/ping`
+  only makes a ping on your target, not on a mob you aren't targeting, so the press has to target it.
 - Once every mob in view is pinged, presses only target, so spamming is safe.
+- **Range** in the settings limits how far away a mob may be (8 to 48 yards, or any nameplate, the default).
 - A **bouncing arrow** sits over the nameplate of the mob the next press will ping, and a **quest icon** sits
   beside every needed mob nobody has (not tapped, not in a fight).
 
@@ -58,16 +58,15 @@ Shift-drag moves it.
   the right with a progress bar, each objective, which mobs count for it and how many are near.
 - **Settings** are under **Options > AddOns > QuestPing** (or the window's Settings button, or
   `/questping options`): party chat on or off, which raid icon goes in front, the nameplate arrow, the quest
-  icons, the guide arrow, using quest databases, enemy nameplates, the ping button, the minimap button, and
+  icons, the guide arrow, the range, using quest databases, enemy nameplates, the ping button, the minimap button, and
   putting things back where they start.
 - `/questping status` prints what you're hunting and what's near in chat.
 
 ## In combat
 
-The game only lets an addon rewrite the button out of combat. In a fight, presses still move through the pings
-that were lined up when the fight started, and everything catches up when it ends. So a mob that comes into view
-mid-fight waits until the fight is over, and one someone pulls mid-fight can still get its ping, though it isn't
-called out in chat.
+The game only lets an addon rewrite the button out of combat, and a press never pulls you off a live target in a
+fight. So in a fight a press pings only while you have no live target; the mobs it skips get their pings when the
+fight ends.
 
 ## Install
 

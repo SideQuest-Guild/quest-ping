@@ -193,7 +193,7 @@ local function refresh()
         hunt = QP.Hunt(QuestPingDB.sources ~= false)
         wanted, wantedDirty, ticks = QP.WantedNames(hunt), false, 0
     end
-    local units, names = QP.Candidates(wanted, plates)
+    local units, names = QP.Candidates(wanted, plates, tonumber(QuestPingDB.range))
     local quiet = quietUnits(units)
 
     local nextUnit, nextName
@@ -231,15 +231,21 @@ function ns.Refresh()
     refresh()
 end
 
--- After a press: the step's mob, if it's still a live hostile one, counts as pinged; say so in chat unless
--- it's already in a fight.
-local presses, lastPress, lastRan = 0, nil, nil -- for /questping status and ping errors
+-- After a press: the step's mob counts as pinged if the macro got it targeted (the ping went to the target);
+-- say so in chat unless it's already in a fight. A step that stopped (in combat, on your own live target)
+-- leaves it for a later press.
+local presses, lastRan, pressing = 0, nil, false -- for /questping status and ping errors
+
+local function beforeClick()
+    pressing = true
+end
 
 local function afterClick(self)
+    pressing = false
     local text = self:GetAttribute("macrotext")
-    presses, lastPress, lastRan = presses + 1, GetTime(), text
+    presses, lastRan = presses + 1, text
     local unit = pingByText[text]
-    if unit and UnitExists(unit) and UnitCanAttack("player", unit) and not UnitIsDead(unit) then
+    if unit and UnitExists(unit) and readable(UnitIsUnit(unit, "target")) and not UnitIsDead(unit) then
         local key = pingKey(unit)
         if not pingedAt[key] then
             pingedAt[key] = GetTime()
@@ -342,6 +348,7 @@ local function createButton()
 
     b.Label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     b.Label:SetPoint("LEFT", b, "RIGHT", 6, 0)
+    b:SetScript("PreClick", beforeClick)
     b:SetScript("PostClick", afterClick)
     b:SetScript("OnMouseUp", function(_, mouseButton)
         if mouseButton == "RightButton" and ns.ToggleWindow then
@@ -419,6 +426,12 @@ function handlers.PLAYER_LOGIN()
     if not enemyPlatesOn() then
         say("enemy nameplates are off, so no quest mob counts as near. Type /questping plates to turn them on.")
     end
+    -- The range items answer only once the game has their data (QP.InRange counts an unloaded one as in range).
+    if C_Item and C_Item.RequestLoadItemDataByID then
+        for _, item in pairs(QP.RANGE_ITEMS) do
+            pcall(C_Item.RequestLoadItemDataByID, item)
+        end
+    end
     secure()
     C_Timer.NewTicker(TICK, refresh)
 end
@@ -461,9 +474,9 @@ function handlers.UPDATE_BINDINGS()
 end
 
 -- The game says why a ping didn't go out (pings off, too many, out of range) only as a flash at the top of the
--- screen; after a press of ours, say it in chat too.
+-- screen; for one of our presses, say it in chat too. It fires while the press's macro runs.
 function handlers.PING_SYSTEM_ERROR(err)
-    if lastPress and GetTime() - lastPress < 1 then
+    if pressing then
         say("the game didn't send the ping: " .. tostring(readable(err) or "no reason given") .. ".")
     end
 end
