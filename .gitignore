@@ -1,0 +1,4 @@
+*.luac
+dist/
+.release/
+.DS_Store

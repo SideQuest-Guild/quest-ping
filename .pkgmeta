@@ -1,0 +1,21 @@
+package-as: QuestPing
+
+# CHANGELOG.md is written by git-cliff (cliff.toml). The release workflow replaces it with just the tagged version's
+# notes before packaging, so CurseForge and GitHub show only what's new.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# The addon lives in QuestPing/ so the repo root can hold tests and the CurseForge page. move-folders makes that
+# folder the shipped addon; nothing else in the repo is packaged.
+move-folders:
+  QuestPing/QuestPing: QuestPing
+
+ignore:
+  - tests
+  - curseforge
+  - dist
+  - .github
+  - .luacheckrc
+  - .pkgmeta
+  - cliff.toml

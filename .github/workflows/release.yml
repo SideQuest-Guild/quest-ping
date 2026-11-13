@@ -1,0 +1,111 @@
+name: Release
+
+# A v* tag builds the addon zip once, uploads it to CurseForge (once QuestPing.toc has an X-Curse-Project-ID and the
+# repo has a CF_API_KEY secret), attests its build provenance and publishes it as a GitHub release. Run by hand, it
+# is a dry run: it builds and attests the zip and leaves a draft release named dry-run-<run id>.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, upload to CurseForge, attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Sigstore certificate for the attestation
+      attestations: write
+    env:
+      RELEASE: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git-cliff and the packager read every tag
+          persist-credentials: false
+
+      # The release notes are this tag's section of the changelog. The packager reads CHANGELOG.md (manual-changelog
+      # in .pkgmeta) and sends it to CurseForge; the GitHub release uses the same file.
+      - name: Write release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGELOG.md
+
+      # No GitHub token is passed, so the packager only uploads to CurseForge; the github-release job publishes to
+      # GitHub. -d skips every upload on a dry run.
+      - name: Package and upload to CurseForge
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0 # v2.6.1
+        with:
+          args: ${{ env.RELEASE != 'true' && '-d' || '' }}
+          pandoc: "false"
+        env:
+          CF_API_TOKEN: ${{ env.RELEASE == 'true' && secrets.CF_API_KEY || '' }}
+
+      - name: Find the zip
+        id: zip
+        run: |
+          shopt -s nullglob
+          zips=(.release/*.zip)
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "expected one zip in .release/, found ${#zips[@]}" >&2
+            exit 1
+          fi
+          echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Write checksums
+        working-directory: .release
+        run: sha256sum ./*.zip > SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.zip.outputs.path }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            ${{ steps.zip.outputs.path }}
+            .release/SHA256SUMS.txt
+            CHANGELOG.md
+          if-no-files-found: error
+          include-hidden-files: true # .release/ starts with a dot
+
+  github-release:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      # Immutable releases lock a release's assets and tag once it is published, so the release is drafted with every
+      # asset attached and published in a separate step.
+      - name: Draft and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          shopt -s nullglob
+          assets=(.release/*.zip .release/SHA256SUMS.txt)
+          if [ -n "$TAG" ]; then
+            gh release create "$TAG" --draft --verify-tag --title "QuestPing $TAG" --notes-file CHANGELOG.md "${assets[@]}"
+            gh release edit "$TAG" --draft=false
+          else
+            gh release create "dry-run-$GITHUB_RUN_ID" --draft --target "$GITHUB_SHA" --title "Dry run $GITHUB_RUN_ID" \
+              --notes-file CHANGELOG.md "${assets[@]}"
+          fi

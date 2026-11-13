@@ -1,0 +1,6 @@
+<Bindings>
+	<Binding name="CLICK QuestPingButton:LeftButton" header="QUESTPING" category="ADDONS"/>
+	<Binding name="QUESTPING_WINDOW" category="ADDONS">
+		QuestPing_ToggleWindow()
+	</Binding>
+</Bindings>

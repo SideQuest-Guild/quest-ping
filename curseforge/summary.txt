@@ -1,0 +1,1 @@
+One key targets and pings the quest mobs you still need when they're near, skips tapped ones, and calls them out in party chat.

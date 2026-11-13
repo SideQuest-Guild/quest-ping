@@ -1,0 +1,128 @@
+-- QuestPing/Options.lua
+-- QuestPing's page under the game menu's Options > AddOns (Settings.RegisterAddOnCategory), the same API
+-- SideQuest's options use on Forever. Every row reads and writes the QuestPingDB field QuestPing.lua reads;
+-- an unset field means the default. /questping options and the window's Settings button open it.
+
+local _, ns = ...
+
+if not Settings then
+    return -- no modern Settings API (headless tests)
+end
+
+local category
+
+local ICON_NAMES = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
+
+local function checkbox(key, name, default, tooltip)
+    local variable = "QUESTPING_" .. key:upper()
+    local setting = Settings.RegisterAddOnSetting(category, variable, key, QuestPingDB, Settings.VarType.Boolean,
+        name, default)
+    Settings.CreateCheckbox(category, setting, tooltip)
+    Settings.SetOnValueChangedCallback(variable, ns.Refresh)
+end
+
+local function header(name)
+    SettingsPanel:GetLayout(category):AddInitializer(
+        Settings.CreateElementInitializer("SettingsListSectionHeaderTemplate", { name = name }))
+end
+
+local function button(name, text, onClick, tooltip)
+    local initializer = CreateSettingsButtonInitializer(name, text, onClick, tooltip, true)
+    SettingsPanel:GetLayout(category):AddInitializer(initializer)
+end
+
+-- QuestPing's key bindings (Bindings.xml), as the same rows Options > Key Bindings draws
+-- (CreateKeybindingEntryInitializer, Blizzard_Keybindings.lua). Setting a key there saves it at once.
+local BINDINGS = { "CLICK QuestPingButton:LeftButton", "QUESTPING_WINDOW" }
+
+local function bindingRows()
+    if not (CreateKeybindingEntryInitializer and GetNumBindings and GetBinding) then
+        return
+    end
+    local index = {}
+    for i = 1, GetNumBindings() do
+        index[GetBinding(i)] = i
+    end
+    local layout = SettingsPanel:GetLayout(category)
+    for _, action in ipairs(BINDINGS) do
+        if index[action] then
+            local ok, initializer = pcall(CreateKeybindingEntryInitializer, index[action], true)
+            if ok and initializer then
+                layout:AddInitializer(initializer)
+            end
+        end
+    end
+end
+
+local function register()
+    QuestPingDB = QuestPingDB or {}
+    category = Settings.RegisterVerticalLayoutCategory("QuestPing")
+    Settings.RegisterAddOnCategory(category)
+
+    header("Pinging")
+    checkbox("chat", "Say it in party chat", true,
+        "When a press pings a mob, say \"<mob> here\" in party chat, or raid chat in a raid. Once per mob; never "
+            .. "for a mob already in a fight, and never when you're alone.")
+    local iconSetting = Settings.RegisterAddOnSetting(category, "QUESTPING_CHATICON", "chatIcon", QuestPingDB,
+        Settings.VarType.Number, "Chat icon", 8)
+    Settings.CreateDropdown(category, iconSetting, function()
+        local options = Settings.CreateControlTextContainer()
+        for i = 8, 1, -1 do
+            options:Add(i, "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i .. ":0|t " .. ICON_NAMES[i])
+        end
+        options:Add(0, "No icon")
+        return options:GetData()
+    end, "The raid icon in front of the party chat line. Everyone in the group sees it.")
+    checkbox("arrow", "Arrow over the next mob", true,
+        "A bouncing arrow over the nameplate of the mob the next press will ping.")
+
+    header("Finding mobs")
+    checkbox("sources", "Use quest databases", true,
+        "Read Polestar's quest database, when Polestar has it loaded, to also hunt the mobs that drop quest items "
+            .. "(\"2/6 Troll Tusk\") and kill objectives named for a group (\"Gnolls slain\"). Off: only mobs the "
+            .. "quest log names.")
+    local plates = Settings.RegisterProxySetting(category, "QUESTPING_ENEMY_PLATES", Settings.VarType.Boolean,
+        "Enemy nameplates", false,
+        function() return C_CVar.GetCVarBool("nameplateShowEnemies") end,
+        function(on)
+            if not InCombatLockdown() then
+                C_CVar.SetCVar("nameplateShowEnemies", on and "1" or "0")
+            end
+            ns.Refresh()
+        end)
+    Settings.CreateCheckbox(category, plates,
+        "The game's own setting. QuestPing only sees mobs with a nameplate up, so with this off nothing is ever "
+            .. "near. Can't change in combat.")
+
+    header("Key bindings")
+    bindingRows()
+
+    header("Window and button")
+    button("Hunt window", "Open", ns.ToggleWindow,
+        "The quests you're hunting, their mobs and how many are near. Also /questping, or right-click the ping button.")
+    local minimap = Settings.RegisterProxySetting(category, "QUESTPING_MINIMAP", Settings.VarType.Boolean,
+        "Minimap button", true,
+        function() return not (QuestPingDB.minimap and QuestPingDB.minimap.hide) end,
+        function(shown)
+            if ns.SetMinimapShown then
+                ns.SetMinimapShown(shown)
+            end
+        end)
+    Settings.CreateCheckbox(category, minimap,
+        "QuestPing's button on the minimap rim: click for the hunt window, right-click for these settings. "
+            .. "QuestPing is also in the minimap's addon list either way.")
+    button("Positions", "Reset", function()
+        ns.ResetButton()
+        ns.ResetWindow()
+    end, "Put the ping button and the window back where they start.")
+end
+
+function ns.OpenOptions()
+    if category then
+        Settings.OpenToCategory(category:GetID())
+    end
+end
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("PLAYER_LOGIN")
+events:SetScript("OnEvent", register)
