@@ -77,7 +77,7 @@ local function register()
         "A bouncing arrow over the nameplate of the mob a press targeted and marked, while it's your target.")
     checkbox("marks", "Mark free quest mobs", true,
         "A quest icon beside the nameplate of every mob you still need that nobody has: not tapped by someone "
-            .. "else and not in a fight.")
+            .. "else, not in a fight and not hurt.")
     checkbox("spawnArrow", "Spawn guide arrow", false,
         "When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one "
             .. "spawns, with its distance. It's a guess from Polestar's or Questie's quest database: the spawn may "

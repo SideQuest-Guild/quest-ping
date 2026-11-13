@@ -12,7 +12,7 @@ local client = {
     "C_CVar", "C_ChatInfo", "C_NamePlate", "C_QuestLog", "C_Timer", "CreateFrame", "GameTooltip", "GetTime",
     "InCombatLockdown", "IsInGroup", "IsInRaid", "IsShiftKeyDown", "QUEST_MONSTERS_KILLED",
     "SecureHandlerWrapScript", "UIParent", "UnitAffectingCombat", "UnitCanAttack", "UnitExists", "UnitGUID",
-    "UnitIsDead", "UnitIsTapDenied", "UnitIsUnit", "UnitName", "issecretvalue",
+    "UnitIsDead", "UnitIsTapDenied", "UnitIsUnit", "UnitName", "UnitHealth", "UnitHealthMax", "issecretvalue",
     "Settings", "SettingsPanel", "CreateSettingsButtonInitializer", "CreateKeybindingEntryInitializer",
     "GetNumBindings", "GetBinding", "GetBindingKey", "GetBindingText", "CLOSE", "SETTINGS", "C_Ping", "C_Item",
     "LibStub",

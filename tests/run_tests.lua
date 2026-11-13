@@ -46,6 +46,8 @@ function UnitCanAttack(_, u) return not U(u).friendly end
 function UnitIsDead(u) return U(u).dead or false end
 function UnitIsTapDenied(u) return U(u).tapped or false end
 function UnitAffectingCombat(u) return U(u).fighting or false end
+function UnitHealth(u) return U(u).health or 100 end
+function UnitHealthMax() return 100 end
 function UnitName(u) return U(u).name end
 function UnitGUID(u)
     local v, key = U(u)
@@ -280,12 +282,15 @@ test("candidates skip dead, tapped, friendly, secret and unwanted mobs; the targ
     eq(names[3], "Kobold Vermin", "plural objective name")
 end)
 
-test("a mob in a fight, or whose combat state is secret, isn't fresh", function()
+test("a mob in a fight or hurt, or whose combat state is secret, isn't fresh", function()
     reset()
-    world.units = { nameplate1 = {}, nameplate2 = { fighting = true }, nameplate3 = { fighting = SECRET } }
+    world.units = { nameplate1 = {}, nameplate2 = { fighting = true }, nameplate3 = { fighting = SECRET },
+        nameplate4 = { health = 99 }, nameplate5 = { health = SECRET } }
     eq(QP.Fresh("nameplate1"), true)
     eq(QP.Fresh("nameplate2"), false)
     eq(QP.Fresh("nameplate3"), false)
+    eq(QP.Fresh("nameplate4"), false, "below full health: someone has been at it")
+    eq(QP.Fresh("nameplate5"), true, "a secret health says nothing; out of combat, it's free")
 end)
 
 test("a press pings your target if it's free, and otherwise targets the next mob by name", function()
@@ -739,6 +744,22 @@ test("the raid icon setting picks the icon, or none", function()
     eq(press(), "nameplate12")
     eq(world.units.nameplate12.icon, nil, "no icon: no mark")
     QuestPingDB.chatIcon = nil
+end)
+
+test("a hurt mob is passed over for a free one, and never marked or pinged", function()
+    clearPlates()
+    near("nameplate60", { name = HUNTER, health = 40 })
+    near("nameplate61", { name = THROWER })
+    eq(press(), nil)
+    eq(currentTarget(), "nameplate61", "the free one, not the hurt one in front of it")
+    eq(press(), "nameplate61")
+
+    clearPlates()
+    near("nameplate62", { name = MYSTIC, health = 50, target = true }) -- you clicked it yourself
+    fire("PLAYER_TARGET_CHANGED")
+    eq(press(), nil, "a hurt target isn't pinged")
+    eq(world.units.nameplate62.icon, nil, "or marked")
+    clearPlates()
 end)
 
 test("the button shows, dimmed, while a needed mob spawns within reach, nameplate or not", function()

@@ -415,23 +415,30 @@ function QP.FarNames(hunt, continent, px, py, reach, groupOn)
     return order, close
 end
 
---- Whether a mob is worth calling out: not already fighting you or anyone else. A secret answer counts as
--- fighting, so a mob is never called out on a guess.
+--- Whether a mob is worth calling out: not already fighting you or anyone else, and not hurt (below full
+-- health: someone has been at it, and it may be on its way back to them). A secret combat state counts as
+-- fighting, so a mob is never called out on a guess; a secret health is no evidence either way, so the combat
+-- check decides alone.
 function QP.Fresh(unit)
-    return readable(UnitAffectingCombat(unit)) == false
+    if readable(UnitAffectingCombat(unit)) ~= false then
+        return false
+    end
+    local health, max = readable(UnitHealth(unit)), readable(UnitHealthMax(unit))
+    return not (health and max and health < max)
 end
 
 --- What the next presses do, target first and ping second, like Polestar's target button plus a ping:
 --
 -- 1. When your target is a quest mob that's free to ping (onTarget: units[1] is the target, and it isn't in
---    quiet, which maps unit -> true for mobs pinged already or already in a fight), a press marks it and pings
+--    quiet, which maps unit -> true for mobs pinged already, in a fight or hurt), a press marks it and pings
 --    it, without targeting anything.
--- 2. Otherwise a press targets the next mob: the unpinged ones in view (names, from QP.Candidates) first, then
+-- 2. Otherwise a press targets the next mob: the free ones in view (names, from QP.Candidates) first, then
 --    the names that may be farther (far, from QP.FarNames), the first of them it finds by name. It pings
---    nothing: once the mob is your target QuestPing can see whether it's tapped or fighting, and only a free one
---    gets step 1 on the next press. When your target is a hunted mob that isn't free (targetName) and none is
---    free in view, the press goes on to the next mob of its name (/targetexact moves on from a target of the
---    same name); once that has come back around (moveOn), its name goes last and the others get their turn.
+--    nothing: once the mob is your target QuestPing can see whether it's tapped, fighting or hurt, and only a
+--    free one gets step 1 on the next press. When your target is a hunted mob that isn't free (targetName) and
+--    none is free in view, the press goes on to the next mob of its name (/targetexact moves on from a target
+--    of the same name); once that has come back around (moveOn), its name goes last and the others get their
+--    turn.
 --
 -- Returns { step 1?, step 2 } or nil for nothing to do. Each step is { text = macro, ping = unit or nil };
 -- marks (QP.PickMarks) maps a unit to the raid icon step 1 puts on it. After step 1 the button falls through

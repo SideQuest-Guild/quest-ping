@@ -21,12 +21,12 @@ see what you've got.
   like the old macro and Polestar's target button), trying the free ones in view first, then every other mob
   you need, nearest known spawn first (from Polestar's or Questie's database). `/targetexact` reaches any mob
   the game has loaded around you, well past the 45-yard nameplates and behind trees, but the game tells addons
-  nothing about it until it's your target. A tapped or busy one in view doesn't hide a free one farther out:
+  nothing about it until it's your target. A tapped, busy or hurt one in view doesn't hide a free one farther out:
   when your target is one that isn't free, the press goes on to the next of its name, and once it comes back
   around, to the other names. If it finds none, you keep the quest mob you had.
-- **Your target is a quest mob that's free** (not tapped, not in a fight, not pinged in the last 10 minutes):
-  the press **marks** it with a raid icon and **pings** it Attack. A tapped or busy one is never marked or
-  pinged, far ones included; the next press just moves on.
+- **Your target is a quest mob that's free** (not tapped, not in a fight, not hurt, not pinged in the last 10
+  minutes): the press **marks** it with a raid icon and **pings** it Attack. A tapped, busy or hurt one is never
+  marked or pinged, far ones included; the next press just moves on.
 - The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line
   of its own.
 - Raid icons: skull first (or the icon you pick), then cross, square and on down for each other mob, skipping
@@ -37,7 +37,7 @@ see what you've got.
 - **Range** in the settings limits how far away a mob may be (8 to 48 yards, or any nameplate, the default).
   With a Range set, far mobs are out of it.
 - A **bouncing arrow** sits over the nameplate of the mob you pinged, while it's your target, and a **quest
-  icon** sits beside every needed mob nobody has (not tapped, not in a fight).
+  icon** sits beside every needed mob nobody has (not tapped, not in a fight, not hurt).
 - The ping button shows, dimmed, while a mob you need spawns within 300 yards, before any nameplate is up, like
   Polestar's target button. Without a quest database it shows for mobs in view; the key works either way.
 
@@ -65,7 +65,9 @@ instances. Shift-drag moves it.
 - **Near:** the mob has an enemy nameplate up, which the game shows out to 45 yards. Enemy nameplates are off by
   default; `/questping plates` turns them on.
 - **Never:** dead, friendly, or tapped by someone else (the grey ones).
-- **Not pinged or called out:** mobs already fighting you or anyone else. You can still target them.
+- **Passed over, never pinged or called out:** mobs already fighting you or anyone else, or below full health
+  (someone has been at them). Targeting by name can still land on one; the next press moves on. You can still
+  target them yourself.
 
 ## Use
 

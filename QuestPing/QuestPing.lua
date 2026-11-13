@@ -2,7 +2,8 @@
 -- The button: shown while a quest mob you still need has a nameplate up (or always, or never: the "button"
 -- setting). A press (a click, the key binding or "/click QuestPingButton") targets the next quest mob by name,
 -- in view or too far for a nameplate, like Polestar's target button. Once it's your target QuestPing can see
--- whether it's free (not tapped, not in a fight, not pinged yet), and if so the next press marks and pings it.
+-- whether it's free (not tapped, not in a fight, not hurt, not pinged yet), and if so the next press marks and
+-- pings it.
 -- A bouncing arrow sits over the nameplate of the mob you pinged, while it's your target.
 --
 -- TargetUnit and C_Ping.SendMacroPing are protected, so this is a SecureActionButton running macros the addon
@@ -121,7 +122,7 @@ local function iconsInView()
     return icons
 end
 
--- Mobs not to ping: pinged already, or already fighting someone.
+-- Mobs not to target first or ping: pinged already, already fighting someone, or hurt (QP.Fresh).
 local function quietUnits(units)
     local now, quiet = GetTime(), {}
     for key, at in pairs(pingedAt) do
@@ -559,7 +560,7 @@ local function createButton()
         GameTooltip:SetText("QuestPing")
         for _, s in ipairs(shown) do
             if s.quiet then
-                GameTooltip:AddLine(s.name .. " (pinged or fighting)", 0.6, 0.6, 0.6)
+                GameTooltip:AddLine(s.name .. " (pinged, fighting or hurt)", 0.6, 0.6, 0.6)
             else
                 GameTooltip:AddLine(s.name, 1, 1, 1)
             end
@@ -715,7 +716,7 @@ local function printStatus()
         .. ".")
     local near = {}
     for _, s in ipairs(shown) do
-        near[#near + 1] = s.name .. (s.quiet and " (pinged or fighting)" or "")
+        near[#near + 1] = s.name .. (s.quiet and " (pinged, fighting or hurt)" or "")
     end
     say(#near > 0 and ("near: " .. table.concat(near, ", ") .. ".") or "none near.")
     if not enemyPlatesOn() then

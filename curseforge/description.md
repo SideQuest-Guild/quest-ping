@@ -14,14 +14,14 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 Like Polestar's target button, a press targets first. The ping comes on the next press, once QuestPing can see what you've got.
 
-- If you have no quest mob targeted, or you're done with yours, a press targets the next one by name, like Polestar's target button. It tries the free ones in view first, then every other mob you need, nearest known spawn first. This reaches any mob the game has loaded around you, well past the 45-yard nameplates and even behind trees, but the game tells addons nothing about a mob until it's your target. A tapped mob in view doesn't hide a free one farther out: the next press goes on to the next mob of that name, then to the other names. If it finds none, you keep the quest mob you had.
-- If your target is a quest mob that's free (not tapped, not in a fight, and not pinged in the last 10 minutes), a press marks it with a raid icon and pings it with the Attack ping. A tapped or busy mob is never marked or pinged, even a far one. The next press just moves on.
+- If you have no quest mob targeted, or you're done with yours, a press targets the next one by name, like Polestar's target button. It tries the free ones in view first, then every other mob you need, nearest known spawn first. This reaches any mob the game has loaded around you, well past the 45-yard nameplates and even behind trees, but the game tells addons nothing about a mob until it's your target. A tapped or hurt mob in view doesn't hide a free one farther out: the next press goes on to the next mob of that name, then to the other names. If it finds none, you keep the quest mob you had.
+- If your target is a quest mob that's free (not tapped, not in a fight, not hurt, and not pinged in the last 10 minutes), a press marks it with a raid icon and pings it with the Attack ping. A tapped, busy or hurt mob is never marked or pinged, even a far one. The next press just moves on.
 - The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own.
 - Raid icons go on in order: the skull first, then the cross, then the square and so on for each other mob. QuestPing skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
 - Targeting goes by name, since the game ignores nameplates for targeting. When several mobs share a name, the game picks which one you get.
 - The Range setting limits how far away a mob may be, from 8 to 48 yards. By default it takes any mob whose nameplate shows. With a Range set, far mobs are out of it.
 
-A bouncing arrow sits over the nameplate of the mob you pinged, while it's your target. A quest icon sits beside every mob you need that nobody has: not tapped by another player and not in a fight.
+A bouncing arrow sits over the nameplate of the mob you pinged, while it's your target. A quest icon sits beside every mob you need that nobody has: not tapped by another player, not in a fight and not hurt.
 
 ## Spawn guide arrow
 
@@ -33,7 +33,7 @@ QuestPing reads your quest log and hunts every kill objective you have not finis
 
 It also hunts for your party. If you have finished an objective but someone in your group still needs it, QuestPing keeps hunting those mobs, far ones included. It reads the game's own tooltip on each mob, which lists every party member on the quest with their count, so nobody else needs the addon. Party members who run QuestPing or Polestar also share their progress for the hunt window.
 
-A mob counts as near when its enemy nameplate shows, which the game does up to 45 yards away. QuestPing skips mobs that are dead, friendly, tapped by another player or already in a fight.
+A mob counts as near when its enemy nameplate shows, which the game does up to 45 yards away. QuestPing skips mobs that are dead, friendly or tapped by another player. A mob already in a fight or below full health is never pinged, and a press passes it over: targeting by name can still land on one, and then the next press moves on.
 
 ## Integrations
 
