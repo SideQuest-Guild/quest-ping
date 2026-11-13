@@ -19,7 +19,7 @@ local client = {
     "Polestar", "Questie", "QuestieLoader", -- optional quest databases (Sources.lua)
     "C_Map", "CreateVector2D", "GetPlayerFacing", "IsInInstance",
     "Ambiguate", "GetNumGroupMembers", "GetNumSubgroupMembers", "UNKNOWNOBJECT", -- party sync (Party.lua)
-    "GetRaidTargetIndex", "C_TooltipInfo", "Enum",
+    "GetRaidTargetIndex", "C_TooltipInfo", "Enum", "wipe",
 }
 
 read_globals = {

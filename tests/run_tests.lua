@@ -56,6 +56,7 @@ function UnitIsUnit(u, other)
 end
 function InCombatLockdown() return world.combat end
 function GetTime() return world.now end
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function IsInRaid() return world.group == "raid" end
 function IsInGroup() return world.group ~= nil end
 function IsShiftKeyDown() return world.shift end
@@ -215,6 +216,20 @@ test("Questie's database names the mobs by the quest log's objective index, and 
     Questie, QuestieLoader = nil, nil
 end)
 
+test("far names: spawns within reach, nearest first; names with no known spawns after them", function()
+    local hunt = {
+        { questID = 1, objectives = { { index = 1, names = { "Skullsplitter Mystic" } } } }, -- spawns at y 600, 300
+        { questID = 99, objectives = { { index = 1, names = { "Somewhere Mob" } } } }, -- no known spawns
+    }
+    local far, close = QP.FarNames(hunt, 1, 500, 500, 200)
+    eq(table.concat(far, ","), "Skullsplitter Mystic,Somewhere Mob")
+    eq(close, true, "a known spawn 100 yards off")
+    far, close = QP.FarNames(hunt, 1, 500, 1000, 200)
+    eq(table.concat(far, ","), "Somewhere Mob", "known spawns, none within reach: left out")
+    eq(close, false)
+    eq(#QP.FarNames(hunt, 2, 500, 500, 200), 1, "another continent")
+end)
+
 test("the nearest spawn is on the player's continent, and the bearing turns the right way", function()
     local here = { name = "here", continent = 1, x = 0, y = 30 }
     local far = { name = "far", continent = 1, x = 0, y = 90 }
@@ -280,7 +295,7 @@ test("a press pings your target if it's free, and otherwise targets the next mob
         .. "/targetexact [noexists] Far Mob\n/cleartarget [dead]",
         "in view first, skipping the quiet one's turn, then the far ones")
 
-    steps = QP.Steps(units, {}, { nameplate8 = 8 }, names, {}, true)
+    steps = QP.Steps(units, {}, { nameplate8 = 8 }, names, {}, true, "Skullsplitter Mystic")
     eq(#steps, 2)
     eq(steps[1].ping, "nameplate8")
     eq(steps[1].text, "/tm [@target,harm,nodead] ~8\n/ping [@target,harm,nodead] 1", "mark and ping, no retarget")
@@ -552,7 +567,7 @@ end
 local MYSTIC, HUNTER, THROWER = "Skullsplitter Mystic", "Skullsplitter Hunter", "Skullsplitter Axe Thrower"
 
 test("a press targets the next mob by name, the next marks and pings it", function()
-    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
+    world.quests = { { id = 5, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
     world.group = "party"
     fire("QUEST_LOG_UPDATE")
     eq(b.shown, false, "nothing near")
@@ -572,8 +587,8 @@ test("a press targets the next mob by name, the next marks and pings it", functi
     eq(press(), "nameplate7")
     eq(arrow.parent.unit, "nameplate7", "the arrow follows your target")
     eq(press(), nil, "already pinged, and nameplate5 is fighting")
+    eq(press(), nil, "presses go on cycling targets but never ping them again")
     eq(press(), nil)
-    eq(currentTarget(), "nameplate7", "the last press keeps a live target")
     eq(#world.chat, 0, "the game says the ping in chat itself; QuestPing says nothing")
     eq(world.units.nameplate3.icon, 8, "skull on the first")
     eq(world.units.nameplate7.icon, 7, "cross on the next")
@@ -588,8 +603,8 @@ test("several mobs of one name: each target press takes the next of that name", 
     eq(press(), "nameplate14", "the nearest first")
     eq(press(), nil)
     eq(press(), "nameplate15", "then the next of that name")
-    eq(press(), nil, "both pinged: the last press keeps the live target")
-    eq(currentTarget(), "nameplate15")
+    eq(press(), nil, "both pinged: a press goes on cycling them but never pings again")
+    eq(press(), nil)
 end)
 
 test("in combat a press only targets and never pulls you off a live target; pings wait for the fight to end",
@@ -625,7 +640,7 @@ end)
 
 test("a mob too far for a nameplate: a press finds it by name and pings it", function()
     clearPlates()
-    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10) } } }
+    world.quests = { { id = 5, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10) } } }
     fire("QUEST_LOG_UPDATE")
     world.units.far1 = { name = HUNTER } -- in sight, but past nameplate range: no NAME_PLATE_UNIT_ADDED
     fire("PLAYER_TARGET_CHANGED")
@@ -641,6 +656,17 @@ test("a mob too far for a nameplate: a press finds it by name and pings it", fun
     eq(currentTarget(), "far5", "a tapped one can be found by name...")
     eq(press(), nil, "...but never pinged")
     world.units.far5 = nil
+
+    near("nameplate30", { name = HUNTER, tapped = true })
+    world.units.far6 = { name = HUNTER }
+    local got
+    for _ = 1, 6 do
+        got = press()
+        if got then break end
+    end
+    eq(got, "far6", "a tapped one in view doesn't hide a free one farther out")
+    clearPlates()
+    world.units.far1 = { name = HUNTER, target = true }
 
     near("nameplate4", { name = MYSTIC })
     eq(press(), nil)
@@ -659,7 +685,7 @@ test("a mob too far for a nameplate: a press finds it by name and pings it", fun
     eq(press(), nil, "with a Range set, far mobs are out of it")
     QuestPingDB.range = nil
     clearPlates()
-    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
+    world.quests = { { id = 5, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
     fire("QUEST_LOG_UPDATE")
 end)
 
@@ -677,6 +703,18 @@ test("the raid icon setting picks the icon, or none", function()
     eq(press(), "nameplate12")
     eq(world.units.nameplate12.icon, nil, "no icon: no mark")
     QuestPingDB.chatIcon = nil
+end)
+
+test("the button shows, dimmed, while a needed mob spawns within reach, nameplate or not", function()
+    clearPlates()
+    world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10) } } } -- spawns 100 and 200 yards off
+    fire("QUEST_LOG_UPDATE")
+    eq(b.shown, true, "like Polestar's target button: there to click before any nameplate is up")
+    world.py = 0.9 -- 300 yards from the nearest spawn
+    fire("QUEST_LOG_UPDATE")
+    eq(b.shown, false, "nowhere near")
+    world.py = nil
+    clearPlates()
 end)
 
 test("the window lists the hunted quest with how many of its mobs are near", function()

@@ -365,35 +365,58 @@ function QP.Candidates(wanted, plates, range, needed)
     return units, names
 end
 
---- The wanted mob names with no unit of that name in view (on a nameplate or as the target), in hunt order:
--- the mobs too far for a nameplate. A press can still take one by name (/targetexact reaches as far as you
--- can see a mob), but nothing tells QuestPing whether it's tapped or fighting until it's targeted.
-function QP.FarNames(hunt, plates)
-    local inView = {}
-    local function look(unit)
-        local name = UnitExists(unit) and readable((UnitName(unit)))
-        if name then
-            inView[name], inView[name .. "s"], inView[name .. "es"] = true, true, true
+--- The names a press may look for beyond the nameplates, nearest first, and whether any of them is known to
+-- spawn near. /targetexact reaches as far as you can see a mob, but nothing tells QuestPing whether it's tapped
+-- or fighting until it's targeted. An unfinished objective whose mobs spawn somewhere a source knows gives the
+-- names of its spawns within reach yards of the player (continent, px, py, world yards); one with no known
+-- spawns gives its names after those, since they may be anywhere. Names with a nameplate up count too: a
+-- tapped one in view doesn't mean a free one isn't farther out.
+function QP.FarNames(hunt, continent, px, py, reach)
+    local best, order = {}, {}
+    local close = false
+    local function add(name, dist)
+        if not best[name] then
+            order[#order + 1] = name
+            best[name] = dist
+        elseif dist < best[name] then
+            best[name] = dist
         end
     end
-    for _, unit in ipairs(plates) do
-        look(unit)
-    end
-    look("target")
-    local far, listed = {}, {}
+    local reachSq = reach * reach
     for _, quest in ipairs(hunt) do
         for _, o in ipairs(quest.objectives) do
             if not o.finished then
-                for _, name in ipairs(o.names) do
-                    if not (inView[name] or listed[name]) then
-                        listed[name] = true
-                        far[#far + 1] = name
+                local points = QP.SpawnPoints(quest.questID, o.index)
+                if points and continent then
+                    for _, p in ipairs(points) do
+                        if p.continent == continent and p.name then
+                            local dx, dy = p.x - px, p.y - py
+                            local sq = dx * dx + dy * dy
+                            if sq <= reachSq then
+                                close = true
+                                add(p.name, math.sqrt(sq))
+                            end
+                        end
+                    end
+                elseif not points then
+                    for _, name in ipairs(o.names) do
+                        add(name, math.huge)
                     end
                 end
             end
         end
     end
-    return far
+    local rank = {}
+    for i, name in ipairs(order) do
+        rank[name] = i
+    end
+    table.sort(order, function(a, b)
+        if best[a] ~= best[b] then
+            return best[a] < best[b]
+        end
+        return rank[a] < rank[b]
+    end)
+    return order, close
 end
 
 --- Whether a mob is worth calling out: not already fighting you or anyone else. A secret answer counts as
@@ -407,15 +430,17 @@ end
 -- 1. When your target is a quest mob that's free to ping (onTarget: units[1] is the target, and it isn't in
 --    quiet, which maps unit -> true for mobs pinged already or already in a fight), a press marks it and pings
 --    it, without targeting anything.
--- 2. Otherwise a press targets the next mob: the unpinged ones in view (names, from QP.Candidates), then the
---    ones too far for a nameplate (far, from QP.FarNames), the first of them it finds by name. It pings
+-- 2. Otherwise a press targets the next mob: the unpinged ones in view (names, from QP.Candidates) first, then
+--    the names that may be farther (far, from QP.FarNames), the first of them it finds by name. It pings
 --    nothing: once the mob is your target QuestPing can see whether it's tapped or fighting, and only a free one
---    gets step 1 on the next press.
+--    gets step 1 on the next press. When your target is a hunted mob that isn't free (targetName) and none is
+--    free in view, the press goes on to the next mob of its name (/targetexact moves on from a target of the
+--    same name); once that has come back around (moveOn), its name goes last and the others get their turn.
 --
 -- Returns { step 1?, step 2 } or nil for nothing to do. Each step is { text = macro, ping = unit or nil };
 -- marks (QP.PickMarks) maps a unit to the raid icon step 1 puts on it. After step 1 the button falls through
--- to step 2, which repeats: out of combat the steps are rewritten after every target change anyway, and in
--- combat (steps frozen at the pull) a press after a ping moves on to the next mob.
+-- to step 2, which repeats: out of combat the steps are rewritten after every press anyway, and in combat
+-- (steps frozen at the pull) a press after a ping moves on to the next mob.
 --
 -- Why by name: Forever's /target and /ping do nothing with a nameplate unit (/target [@nameplate1] and /ping
 -- [@nameplate3] 1 run silently in game), while /targetexact does work, as far as you can see a mob. It takes
@@ -453,7 +478,7 @@ local function targetStep(chain, targetName)
     return { text = tail ~= "" and text or text:sub(1, -2) }
 end
 
-function QP.Steps(units, quiet, marks, names, far, onTarget)
+function QP.Steps(units, quiet, marks, names, far, onTarget, targetName, moveOn)
     marks, names = marks or {}, names or {}
     local steps = {}
     local target = onTarget and units[1] or nil
@@ -474,11 +499,20 @@ function QP.Steps(units, quiet, marks, names, far, onTarget)
             add(names[i])
         end
     end
+    local free = #chain
+    if free == 0 and targetName and not moveOn then
+        add(targetName)
+    end
     for _, name in ipairs(far or {}) do
-        add(name)
+        if not (moveOn and name == targetName) then
+            add(name)
+        end
+    end
+    if targetName and moveOn then
+        add(targetName)
     end
     if #chain > 0 then
-        steps[#steps + 1] = targetStep(chain, onTarget and names[1] or nil)
+        steps[#steps + 1] = targetStep(chain, targetName)
     elseif #steps == 0 then
         -- Nothing new to take: keep a live target, or take back the first mob in view.
         for i in ipairs(units) do

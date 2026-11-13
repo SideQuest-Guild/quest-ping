@@ -208,6 +208,20 @@ local function applySteps(steps, near)
     end
 end
 
+local FAR_REACH = 200 -- yards: a quest mob spawning this close may be in sight past its nameplate
+-- Targeting presses through mobs of one name that aren't free: the name, the mobs (GUIDs) it has reached, and
+-- whether it has come back around to one, so the next press tries the other names first (QP.Steps' moveOn).
+local cycle = { name = nil, seen = {}, moveOn = false }
+
+-- Your target's name when it's a mob you're hunting, in any state (tapped, pinged, fighting).
+local function huntedTargetName()
+    if not (UnitExists("target") and UnitCanAttack("player", "target")) then
+        return nil
+    end
+    local name = readable((UnitName("target")))
+    return name and QP.Matches(wanted, name) and name or nil
+end
+
 local function refresh()
     if not secured then
         return
@@ -220,11 +234,17 @@ local function refresh()
     local range = tonumber(QuestPingDB.range)
     local units, names = QP.Candidates(wanted, plates, range, QuestPingDB.party ~= false and partyNeeds or nil)
     candidates = units
-    -- Your target first: a quest mob you have targeted is the one the next press pings. With a Range set, far
-    -- mobs (no nameplate) are out of it by definition.
+    -- Your target first: a quest mob you have targeted is the one the next press pings. Farther mobs are
+    -- looked for by name like Polestar's target button does, nearest known spawn first; with a Range set
+    -- they're out of it by definition.
     local first = units[1]
     local onQuestMob = first and (first == "target" or readable(UnitIsUnit(first, "target"))) and true or false
-    local far = (not range or range == 0) and QP.FarNames(hunt, plates) or {}
+    local far, close = {}, false
+    if not range or range == 0 then
+        local continent, px, py = ns.PlayerWorldPosition()
+        far, close = QP.FarNames(hunt, continent, px, py, FAR_REACH)
+    end
+    local targetName = huntedTargetName()
     local quiet = quietUnits(units)
     local icons = iconsInView()
     local raidMarks = QP.PickMarks(units, quiet, icons, tonumber(QuestPingDB.chatIcon) or 8)
@@ -246,7 +266,7 @@ local function refresh()
     button.Label:SetText(nextName or far[1] or names[1] or "")
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
-    button:SetAlpha(#units > 0 and 1 or 0.5)
+    button:SetAlpha(nextUnit and 1 or 0.5)
     pointArrowAt(pressedFor)
     markFree(units)
     ns.state.hunt, ns.state.shown = hunt, shown
@@ -254,11 +274,13 @@ local function refresh()
         fn()
     end
 
-    sig = (onQuestMob and "T|" or "|") .. table.concat(sig, ",") .. "|" .. table.concat(far, ",")
+    sig = (targetName or "") .. (onQuestMob and "T|" or "|") .. table.concat(sig, ",") .. "|"
+        .. table.concat(far, ",") .. "|" .. tostring(cycle.moveOn)
     if sig == appliedSig or InCombatLockdown() then
         return
     end
-    applySteps(QP.Steps(units, quiet, raidMarks, names, far, onQuestMob), #units > 0)
+    applySteps(QP.Steps(units, quiet, raidMarks, names, far, onQuestMob, targetName, cycle.moveOn),
+        #units > 0 or close)
     appliedSig = sig
 end
 
@@ -293,6 +315,27 @@ local function afterClick()
                 pingedAt[key] = pingedAt[key] or GetTime()
                 break
             end
+        end
+        -- Done with this one: the next press tries the other names first (the same name still comes last).
+        wipe(cycle.seen)
+        cycle.name, cycle.moveOn = huntedTargetName(), true
+        local guid = cycle.name and readable(UnitGUID("target"))
+        if guid then
+            cycle.seen[guid] = true
+        end
+    else
+        -- A targeting press: note where it landed, to tell when a name has come back around.
+        local name = huntedTargetName()
+        local guid = name and readable(UnitGUID("target"))
+        if name ~= cycle.name then
+            cycle.name, cycle.moveOn = name, false
+            wipe(cycle.seen)
+        end
+        if name and guid then
+            if cycle.seen[guid] then
+                cycle.moveOn = true
+            end
+            cycle.seen[guid] = true
         end
     end
     refresh()
