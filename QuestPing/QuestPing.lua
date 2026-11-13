@@ -7,10 +7,11 @@
 --
 -- TargetUnit and C_Ping.SendMacroPing are protected, so this is a SecureActionButton running macros the addon
 -- writes (Logic.lua's QP.Steps): one per press, stored as qp-macro1..n. A secure snippet wrapped around the
--- click moves to the next one, so spamming works in combat too. The steps themselves, and Show/Hide, can only
--- change out of combat: in combat the button keeps the steps from the pull, and new ones go on at
--- PLAYER_REGEN_ENABLED. The button acts on the key's release (useOnKeyDown false, up clicks only) so each
--- press runs exactly once.
+-- click moves to the next one, so spamming works in combat too. The steps themselves, and whether the button
+-- is on screen, can only change out of combat: in combat the button keeps the steps from the pull, and new ones
+-- go on at PLAYER_REGEN_ENABLED. The button acts on the key's release (useOnKeyDown false, up clicks only) so
+-- each press runs exactly once. Forever drops that release on a hidden button, so after setup the button is
+-- never hidden: off screen it is invisible (alpha 0) and lets the mouse through, and its key still works.
 
 local _, ns = ...
 local QP = ns.QP
@@ -65,6 +66,7 @@ end
 local appliedSig -- the units and pings the steps were written for
 local shown = {} -- { name, quiet } per candidate, for the tooltip and the window
 local button, arrow, secured
+local onScreen = false -- the "button" setting's verdict, as last applied out of combat
 
 local BINDING = "CLICK QuestPingButton:LeftButton"
 local BORDER, BORDER_HOVER = { 1, 0.82, 0, 0.45 }, { 1, 0.82, 0, 1 }
@@ -193,6 +195,13 @@ local function markFree(units)
     end
 end
 
+-- On or off screen without Hide (see the top of the file): off is click-through here and alpha 0 in refresh.
+-- EnableMouse on the secure button is out of combat only, like Show and Hide.
+local function setOnScreen(on)
+    onScreen = on
+    button:EnableMouse(on)
+end
+
 local function applySteps(steps, near, fights)
     for i = 1, stepCount do
         button:SetAttribute("qp-macro" .. i, nil)
@@ -221,14 +230,9 @@ local function applySteps(steps, near, fights)
     button:SetAttribute("type", (steps or fights) and "macro" or nil)
     button:SetAttribute("macrotext", steps and steps[1].text or nil)
     -- "near" (default): only while a mob is in view (the key also reaches far ones). "always": also idle,
-    -- dimmed, so you can find, move and click it. "never": key binding only (a hidden button still takes its
-    -- binding's clicks).
+    -- dimmed, so you can find, move and click it. "never": key binding only.
     local mode = QuestPingDB.button
-    if mode == "always" or (mode ~= "never" and near) then
-        button:Show()
-    else
-        button:Hide()
-    end
+    setOnScreen(mode == "always" or (mode ~= "never" and near))
 end
 
 local FAR_REACH = 300 -- yards: with a needed mob spawning this close, the button is up before any nameplate
@@ -319,7 +323,6 @@ local function refresh()
     local fallbackLabel = nextName or far[1] or names[1] or ""
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
-    button:SetAlpha(nextUnit and 1 or 0.5)
     pointArrowAt(pressedFor)
     markFree(units)
     ns.state.hunt, ns.state.shown = hunt, shown
@@ -344,6 +347,7 @@ local function refresh()
         applySteps(steps, #units > 0 or close, QP.FightSteps(fighting, pack, chain))
         appliedSig = sig
     end
+    button:SetAlpha(onScreen and (nextUnit and 1 or 0.5) or 0)
     -- What the next press does: in a fight on a live mob, ping another and come back; else the next step.
     local label
     if fightCount > 0 and SecureCmdOptionParse(FIGHTING) then
@@ -588,7 +592,7 @@ local function secure()
     button:SetAttribute("useOnKeyDown", false)
     local header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
     SecureHandlerWrapScript(button, "OnClick", header, NEXT_STEP)
-    button:Hide()
+    setOnScreen(false)
     secured = true
     refresh()
 end

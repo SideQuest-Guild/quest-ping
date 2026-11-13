@@ -387,7 +387,7 @@ newObject = function()
 end
 function CreateFrame(_, name)
     local f = newObject()
-    f.attrs, f.scripts, f.shown, f.events = {}, {}, true, {}
+    f.attrs, f.scripts, f.shown, f.events, f.alpha, f.mouse = {}, {}, true, {}, 1, true
     f.SetAttribute = function(self, k, v)
         assert(not world.combat, "SetAttribute in combat")
         self.attrs[k] = v
@@ -405,6 +405,11 @@ function CreateFrame(_, name)
     f.IsShown = function(self) return self.shown end
     f.SetShown = function(self, v)
         if v then self:Show() else self:Hide() end
+    end
+    f.SetAlpha = function(self, a) self.alpha = a end
+    f.EnableMouse = function(self, on)
+        assert(not world.combat or self ~= created.QuestPingButton, "EnableMouse in combat")
+        self.mouse = on
     end
     f.SetParent = function(self, p) self.parent = p end
     f.SetScript = function(self, k, fn) self.scripts[k] = fn end
@@ -559,7 +564,10 @@ local function runMacro(text)
     return pinged
 end
 
+-- A key press: the binding's click reaches the button only while it's shown (Forever drops the key's release on
+-- a hidden button), so "off screen" has to mean invisible, not hidden.
 local function press()
+    assert(b.shown, "a hidden button gets no key binding clicks")
     local handle = { GetAttribute = function(_, k) return b.attrs[k] end,
         SetAttribute = function(_, k, v) b.attrs[k] = v end }
     b.scripts.PreClick(b)
@@ -567,6 +575,11 @@ local function press()
     local pinged = b.attrs.macrotext and runMacro(b.attrs.macrotext)
     b.scripts.PostClick(b)
     return pinged
+end
+
+-- Whether you can see and click the button (it never hides: see press).
+local function onScreen()
+    return b.shown and b.alpha > 0 and b.mouse
 end
 
 local function near(unit, fields)
@@ -588,11 +601,11 @@ test("a press targets the next mob by name, the next marks and pings it", functi
     world.quests = { { id = 5, objectives = { kill(MYSTIC, 0, 10), kill(HUNTER, 0, 10), kill(THROWER, 0, 10) } } }
     world.group = "party"
     fire("QUEST_LOG_UPDATE")
-    eq(b.shown, false, "nothing near")
+    eq(onScreen(), false, "nothing near")
     near("nameplate3", { name = MYSTIC })
     near("nameplate5", { name = HUNTER, fighting = true })
     near("nameplate7", { name = THROWER })
-    eq(b.shown, true)
+    eq(onScreen(), true)
     eq(arrow.shown, false, "no arrow before a press marks a mob")
 
     eq(press(), nil, "the first press only targets")
@@ -667,7 +680,7 @@ test("a mob too far for a nameplate: a press finds it by name and pings it", fun
     fire("QUEST_LOG_UPDATE")
     world.units.far1 = { name = HUNTER } -- in sight, but past nameplate range: no NAME_PLATE_UNIT_ADDED
     fire("PLAYER_TARGET_CHANGED")
-    eq(b.shown, false, "nothing in view, so no button; the key still works")
+    eq(onScreen(), false, "nothing in view, so no button; the key still works")
     eq(press(), nil, "found by name and targeted")
     eq(currentTarget(), "far1")
     eq(press(), "far1", "then pinged")
@@ -732,10 +745,10 @@ test("the button shows, dimmed, while a needed mob spawns within reach, nameplat
     clearPlates()
     world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10) } } } -- spawns 100 and 200 yards off
     fire("QUEST_LOG_UPDATE")
-    eq(b.shown, true, "like Polestar's target button: there to click before any nameplate is up")
+    eq(onScreen(), true, "like Polestar's target button: there to click before any nameplate is up")
     world.py = 0.95 -- 350 yards from the nearest spawn
     fire("QUEST_LOG_UPDATE")
-    eq(b.shown, false, "nowhere near")
+    eq(onScreen(), false, "nowhere near")
     world.py = nil
     clearPlates()
 end)
@@ -861,25 +874,25 @@ test("a mob you're done with stays hunted while a party member still needs it", 
     eq(world.addon[#world.addon], "PARTY QuestPing 1R|", "someone joined: ours (nothing) and a request for theirs")
     fire("QUEST_LOG_UPDATE")
     near("nameplate40", { name = "Skullsplitter Mystic" })
-    eq(b.shown, false, "done, and nobody said they need it")
+    eq(onScreen(), false, "done, and nobody said they need it")
 
     partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Ana")
-    eq(b.shown, true, "Ana still needs objective 1")
+    eq(onScreen(), true, "Ana still needs objective 1")
     eq(ns.state.hunt[1].objectives[1].done, true, "done for you")
     eq(ns.state.hunt[1].objectives[1].party[1], "Ana")
     eq(press(), nil)
     eq(press(), "nameplate40")
 
     partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|", "PARTY", "Ana")
-    eq(b.shown, false, "Ana's done too")
+    eq(onScreen(), false, "Ana's done too")
     partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Stranger")
-    eq(b.shown, false, "only the group counts")
+    eq(onScreen(), false, "only the group counts")
 
     partyFire("CHAT_MSG_ADDON", "QuestPing", "1S|1:1", "PARTY", "Ana")
-    eq(b.shown, true)
+    eq(onScreen(), true)
     world.units.party1 = nil
     partyFire("GROUP_ROSTER_UPDATE")
-    eq(b.shown, false, "Ana left: her needs go with her")
+    eq(onScreen(), false, "Ana left: her needs go with her")
     world.group = nil
     clearPlates()
 end)
@@ -971,14 +984,14 @@ end)
 test("finishing the objective hides the button", function()
     world.quests[1].objectives[1] = kill("Skullsplitter Mystic", 10, 10)
     fire("QUEST_LOG_UPDATE")
-    eq(b.shown, false)
+    eq(onScreen(), false)
     eq(b.attrs.type, nil)
 end)
 
 test("the button setting: always keeps it up idle, never hides it but the key still works", function()
     QuestPingDB.button = "always"
     ns.Refresh()
-    eq(b.shown, true, "idle but on screen to click and move")
+    eq(onScreen(), true, "idle but on screen to click and move")
     eq(b.attrs.type, nil, "a click with nothing near does nothing")
 
     world.quests[1].objectives[1] = kill("Skullsplitter Mystic", 0, 10)
@@ -986,17 +999,17 @@ test("the button setting: always keeps it up idle, never hides it but the key st
     QuestPingDB.button = "never"
     world.combat = true
     ns.Refresh() -- changed mid-fight: nothing protected moves until it ends
-    eq(b.shown, true)
+    eq(onScreen(), true)
     world.combat = false
     near("nameplate20", { name = "Skullsplitter Mystic" })
     fire("PLAYER_REGEN_ENABLED")
-    eq(b.shown, false, "never shown")
+    eq(onScreen(), false, "never shown")
     eq(press(), nil)
     eq(press(), "nameplate20", "the key binding's clicks still target and ping")
 
     QuestPingDB.button = nil
     ns.Refresh()
-    eq(b.shown, true, "default: shown while a mob is near")
+    eq(onScreen(), true, "default: shown while a mob is near")
 end)
 
 print(("%d tests, %d failed"):format(count, failures))
