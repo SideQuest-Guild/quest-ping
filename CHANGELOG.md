@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 (2026-11-13)
+
+### Fixed
+
+- A press finds and the button comes up for mobs of Forever's own quests, whose spawns come from Polestar's Codex by name when no quest database knows them
+
 ## v0.2.0 (2026-11-13)
 
 ### New
