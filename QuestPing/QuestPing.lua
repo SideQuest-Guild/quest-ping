@@ -233,8 +233,12 @@ end
 
 -- After a press: the step's mob, if it's still a live hostile one, counts as pinged; say so in chat unless
 -- it's already in a fight.
+local presses, lastPress, lastRan = 0, nil, nil -- for /questping status and ping errors
+
 local function afterClick(self)
-    local unit = pingByText[self:GetAttribute("macrotext")]
+    local text = self:GetAttribute("macrotext")
+    presses, lastPress, lastRan = presses + 1, GetTime(), text
+    local unit = pingByText[text]
     if unit and UnitExists(unit) and UnitCanAttack("player", unit) and not UnitIsDead(unit) then
         local key = pingKey(unit)
         if not pingedAt[key] then
@@ -456,6 +460,14 @@ function handlers.UPDATE_BINDINGS()
     end
 end
 
+-- The game says why a ping didn't go out (pings off, too many, out of range) only as a flash at the top of the
+-- screen; after a press of ours, say it in chat too.
+function handlers.PING_SYSTEM_ERROR(err)
+    if lastPress and GetTime() - lastPress < 1 then
+        say("the game didn't send the ping: " .. tostring(readable(err) or "no reason given") .. ".")
+    end
+end
+
 local events = CreateFrame("Frame")
 for event in pairs(handlers) do
     -- An event the client doesn't know throws on Forever instead of being ignored.
@@ -496,6 +508,18 @@ local function printStatus()
     if not enemyPlatesOn() then
         say("enemy nameplates are off: /questping plates turns them on.")
     end
+    -- What a press does and whether the game will ping, for "it didn't ping" reports.
+    local key = GetBindingKey and GetBindingKey(BINDING)
+    say("key: " .. (key or "none bound") .. "; presses since login: " .. presses .. ".")
+    if lastRan then
+        say("last press ran: " .. lastRan:gsub("\n", " | "))
+    end
+    local function cvar(name)
+        return C_CVar and C_CVar.GetCVar and tostring(C_CVar.GetCVar(name)) or "?"
+    end
+    local system = C_Ping and C_Ping.IsPingSystemEnabled and tostring(C_Ping.IsPingSystemEnabled()) or "no C_Ping"
+    say(("pings: system %s, enablePings %s, ping sounds %s, ping volume %s."):format(system, cvar("enablePings"),
+        cvar("Sound_EnablePingSounds"), cvar("Sound_PingVolume")))
 end
 
 SLASH_QUESTPING1 = "/questping"
