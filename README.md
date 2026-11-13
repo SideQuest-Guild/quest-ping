@@ -22,11 +22,18 @@ It replaces a macro like this, without editing it for every quest:
 - Once every mob in view is pinged, presses only target, so spamming is safe.
 - A **bouncing arrow** sits over the nameplate of the mob the next press will ping.
 
+## Guide arrow
+
+When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one
+spawns, with its name and distance. Walk where it points; once a needed mob's nameplate comes up, the bouncing
+arrow over it takes over. The spawn places come from Polestar's or Questie's quest database, so the guide arrow
+needs one of them. It hides in instances. Shift-drag moves it.
+
 ## Which mobs
 
 - **Wanted:** every kill objective in your quest log that isn't finished ("3/10 Skullsplitter Mystic slain").
-  With Polestar installed, its quest database adds the mobs that drop quest items ("2/6 Troll Tusk") and the
-  mobs a kill line counts under a group name ("Gnolls slain").
+  With Polestar or Questie installed, its quest database adds the mobs that drop quest items ("2/6 Troll Tusk")
+  and the mobs a kill line counts under a group name ("Gnolls slain"). Polestar is asked first.
 - **Near:** the mob has an enemy nameplate up, which the game shows out to 45 yards. Enemy nameplates are off by
   default; `/questping plates` turns them on.
 - **Never:** dead, friendly, or tapped by someone else (the grey ones).
@@ -44,8 +51,8 @@ It replaces a macro like this, without editing it for every quest:
   Attune's: the quests you're hunting on the left with how many of their mobs are near, and the picked quest on
   the right with a progress bar, each objective, which mobs count for it and how many are near.
 - **Settings** are under **Options > AddOns > QuestPing** (or the window's Settings button, or
-  `/questping options`): party chat on or off, which raid icon goes in front, the arrow, using quest databases,
-  enemy nameplates, and putting the button and window back.
+  `/questping options`): party chat on or off, which raid icon goes in front, the nameplate arrow, the guide
+  arrow, using quest databases, enemy nameplates, the minimap button, and putting things back where they start.
 - `/questping status` prints what you're hunting and what's near in chat.
 
 ## In combat
@@ -54,11 +61,6 @@ The game only lets an addon rewrite the button out of combat. In a fight, presse
 that were lined up when the fight started, and everything catches up when it ends. So a mob that comes into view
 mid-fight waits until the fight is over, and one someone pulls mid-fight can still get its ping, though it isn't
 called out in chat.
-
-## Not possible
-
-An arrow that points across the world to a mob, like a waypoint arrow: the game doesn't tell addons where other
-mobs are, only where their nameplate is on screen.
 
 ## Install
 

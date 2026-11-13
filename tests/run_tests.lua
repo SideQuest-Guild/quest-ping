@@ -129,6 +129,78 @@ test("Polestar's database adds droppers and group members, only while loaded and
     Polestar = nil
 end)
 
+-- A Questie that has started, with one quest: objective 1 kills npc 100, objective 2 is any of npcs 101 and 102
+-- (kill credit), objective 3 collects item 500 dropped by npc 103. Npc 100 spawns at 50,60 on area 10 (uiMap 1).
+local function fakeQuestie()
+    local npcs = {
+        [100] = { name = "Skullsplitter Mystic", spawns = { [10] = { { 50, 60 } } } },
+        [101] = { name = "Riverpaw Brute" }, [102] = { name = "Riverpaw Mongrel" }, [103] = { name = "Gnoll Pup" },
+    }
+    local modules = {
+        QuestieDB = {
+            GetQuest = function(id)
+                return id == 1 and { ObjectiveData = {
+                    { Type = "monster", Id = 100 },
+                    { Type = "killcredit", IdList = { 101, 102 } },
+                    { Type = "item", Id = 500 },
+                } } or nil
+            end,
+            QueryNPCSingle = function(id, field) return npcs[id] and npcs[id][field] end,
+            QueryItemSingle = function(id, field) return id == 500 and field == "npcDrops" and { 103 } or nil end,
+        },
+        ZoneDB = { GetUiMapIdByAreaId = function(_, area) return area == 10 and 1 or nil end },
+    }
+    Questie = { started = true }
+    QuestieLoader = { ImportModule = function(_, name) return modules[name] end }
+end
+
+-- One zone map (uiMap 1) on continent 1, 1000 yards on a side; world x and y are the map's x and y in yards.
+function CreateVector2D(x, y) return { x = x, y = y } end
+C_Map = {
+    GetBestMapForUnit = function() return 1 end,
+    GetPlayerMapPosition = function() return { x = world.px or 0.5, y = world.py or 0.5 } end,
+    GetWorldPosFromMapPos = function(map, v) return map == 1 and 1 or nil, { x = v.x * 1000, y = v.y * 1000 } end,
+}
+
+test("Questie's database names the mobs by the quest log's objective index, and where they spawn", function()
+    reset()
+    world.quests = { { id = 1, objectives = {
+        kill("Skullsplitter Mystic", 0, 10), kill("Gnolls", 0, 8),
+        { text = "0/5 Gnoll Paw", type = "item", finished = false, numFulfilled = 0, numRequired = 5 },
+    } } }
+    Questie = { started = false }
+    QuestieLoader = { ImportModule = function() error("not ready yet") end }
+    eq(QP.WantedNames(QP.Hunt(true))["Riverpaw Brute"], nil, "Questie not started")
+
+    fakeQuestie()
+    local wanted = QP.WantedNames(QP.Hunt(true))
+    eq(wanted["Riverpaw Mongrel"], true, "kill credit mobs")
+    eq(wanted["Gnoll Pup"], true, "item droppers")
+    local points = QP.SpawnPoints(1, 1)
+    eq(#points, 1)
+    eq(points[1].continent, 1)
+    eq(points[1].x, 500)
+    eq(points[1].y, 600)
+    Questie, QuestieLoader = nil, nil
+end)
+
+test("the nearest spawn is on the player's continent, and the bearing turns the right way", function()
+    local here = { name = "here", continent = 1, x = 0, y = 30 }
+    local far = { name = "far", continent = 1, x = 0, y = 90 }
+    local elsewhere = { name = "other continent", continent = 2, x = 0, y = 1 }
+    local p, dist = QP.Nearest({ far, elsewhere, here }, 1, 0, 0)
+    eq(p.name, "here")
+    eq(dist, 30)
+    eq(QP.Nearest({ elsewhere }, 1, 0, 0), nil)
+    local function near(a, b) return math.abs(a - b) < 1e-9 end
+    assert(near(QP.Bearing(0, 0, 10, 0, 0), 0), "due north while facing north: straight ahead")
+    assert(near(QP.Bearing(0, 0, 0, 10, 0), math.pi / 2), "due west while facing north: to the left")
+    assert(near(QP.Bearing(0, 0, 10, 0, math.pi / 2), -math.pi / 2), "north while facing west: to the right")
+    assert(near(math.abs(QP.Bearing(0, 0, -10, 0, 0)), math.pi), "behind")
+    local wrapped = QP.Bearing(0, 0, 0, -10, 3)
+    assert(wrapped > -math.pi and wrapped <= math.pi, "kept within one turn, got " .. wrapped)
+end)
+
 test("candidates skip dead, tapped, friendly, secret and unwanted mobs; the target goes first", function()
     reset()
     local wanted = { ["Skullsplitter Mystic"] = true, ["Kobold Vermins"] = true }
@@ -221,6 +293,11 @@ function CreateFrame(_, name)
     f.SetParent = function(self, p) self.parent = p end
     f.SetScript = function(self, k, fn) self.scripts[k] = fn end
     f.RegisterEvent = function(self, e) self.events[e] = true end
+    f.CreateTexture = function()
+        local t = newObject()
+        t.SetRotation = function(self, r) self.rotation = r end
+        return t
+    end
     f.CreateFontString = function()
         local fs = newObject()
         fs.SetText = function(self, t) self.text = t end
@@ -249,6 +326,8 @@ C_CVar = { GetCVarBool = function() return true end }
 C_Timer = { NewTicker = function() end }
 SlashCmdList = {}
 UISpecialFrames = {}
+function GetPlayerFacing() return 0 end
+function IsInInstance() return false end
 
 reset()
 assert(loadfile("QuestPing/QuestPing.lua"))("QuestPing", ns)
@@ -263,6 +342,11 @@ local b, arrow = created.QuestPingButton, nil
 for _, f in ipairs(created) do
     if f ~= b and f ~= events and f.scripts.OnEvent == nil and not arrow then arrow = f end
 end
+
+-- The guide arrow (Guide.lua): its always-running clock frame and its own login.
+assert(loadfile("QuestPing/Guide.lua"))("QuestPing", ns)
+local guideClock, guideEvents = created[#created - 1], created[#created]
+guideEvents.scripts.OnEvent(guideEvents, "PLAYER_LOGIN")
 
 -- A press: the secure snippet (which may set attributes in combat, like the real restricted environment),
 -- then the macro it picked, then PostClick. Returns the mob the macro pinged, or nil.
@@ -368,6 +452,29 @@ test("the window lists the hunted quest with how many of its mobs are near", fun
     eq(w.Detail.Bar.Text.text, "0 / 10")
     ns.ToggleWindow()
     eq(w.shown, false)
+end)
+
+test("the guide arrow points at the nearest spawn until a needed mob is in view", function()
+    clearPlates()
+    fakeQuestie()
+    world.quests = { { id = 1, objectives = { kill("Skullsplitter Mystic", 0, 10) } } }
+    fire("QUEST_LOG_UPDATE")
+    local g = created.QuestPingGuide
+    guideClock.scripts.OnUpdate(guideClock, 1)
+    eq(g.shown, true)
+    assert(g.Text.text:find("Skullsplitter Mystic", 1, true) and g.Text.text:find("100 yd", 1, true), g.Text.text)
+    assert(math.abs(g.Arrow.rotation - math.pi / 2) < 1e-9, "spawn is due west: arrow turns left")
+
+    near("nameplate20", { name = "Skullsplitter Mystic" })
+    guideClock.scripts.OnUpdate(guideClock, 1)
+    eq(g.shown, false, "the nameplate arrow takes over")
+
+    clearPlates()
+    QuestPingDB.guide = false
+    guideClock.scripts.OnUpdate(guideClock, 1)
+    eq(g.shown, false, "switched off")
+    QuestPingDB.guide = nil
+    Questie, QuestieLoader = nil, nil
 end)
 
 test("finishing the objective hides the button", function()

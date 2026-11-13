@@ -16,7 +16,8 @@ local client = {
     "Settings", "SettingsPanel", "CreateSettingsButtonInitializer", "CreateKeybindingEntryInitializer",
     "GetNumBindings", "GetBinding", "CLOSE", "SETTINGS",
     "LibStub",
-    "Polestar", -- optional: Polestar's quest database (Sources.lua)
+    "Polestar", "Questie", "QuestieLoader", -- optional quest databases (Sources.lua)
+    "C_Map", "CreateVector2D", "GetPlayerFacing", "IsInInstance",
 }
 
 read_globals = {

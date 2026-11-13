@@ -6,7 +6,7 @@
 ## IconTexture: Interface\Icons\Ability_Hunter_SniperShot
 ## AddonCompartmentFunc: QuestPing_OnAddonCompartmentClick
 ## SavedVariablesPerCharacter: QuestPingDB
-## OptionalDeps: Polestar
+## OptionalDeps: Polestar, Questie
 ## X-License: MIT
 ## X-Curse-Project-ID: 1801776
 ## X-Website: https://github.com/SideQuest-Guild/quest-ping
@@ -19,5 +19,6 @@ Logic.lua
 Sources.lua
 QuestPing.lua
 Window.lua
+Guide.lua
 Options.lua
 Minimap.lua

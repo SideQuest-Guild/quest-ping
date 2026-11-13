@@ -75,6 +75,14 @@ local function register()
     end, "The raid icon in front of the party chat line. Everyone in the group sees it.")
     checkbox("arrow", "Arrow over the next mob", true,
         "A bouncing arrow over the nameplate of the mob the next press will ping.")
+    checkbox("guide", "Guide arrow", true,
+        "When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one "
+            .. "spawns, with its distance. Needs Polestar's or Questie's quest database. Shift-drag to move it.")
+    Settings.SetOnValueChangedCallback("QUESTPING_GUIDE", function()
+        if ns.UpdateGuide then
+            ns.UpdateGuide()
+        end
+    end)
 
     header("Finding mobs")
     checkbox("sources", "Use quest databases", true,
@@ -114,7 +122,8 @@ local function register()
     button("Positions", "Reset", function()
         ns.ResetButton()
         ns.ResetWindow()
-    end, "Put the ping button and the window back where they start.")
+        ns.ResetGuide()
+    end, "Put the ping button, the window and the guide arrow back where they start.")
 end
 
 function ns.OpenOptions()

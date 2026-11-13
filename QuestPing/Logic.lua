@@ -75,8 +75,10 @@ function QP.ObjectiveName(text)
 end
 
 --- Quest databases that know which mobs an objective is about (Sources.lua registers them). Each is
--- { name, label, mobs = function(questID, index) -> { names } or nil, status = function() -> text }; the first
--- that answers for an objective wins.
+-- { name, label, mobs = function(questID, index) -> { names } or nil, status = function() -> text, and
+-- optionally spawns = function(questID, index) -> { { name, continent, x, y } } or nil }, where x and y are
+-- world yards as C_Map.GetWorldPosFromMapPos gives them (x grows north, y grows west). The first source that
+-- answers for an objective wins.
 QP.Sources = {}
 
 function QP.AddSource(source)
@@ -91,6 +93,51 @@ local function fromSources(questID, index)
         end
     end
     return nil
+end
+
+local spawnCache = {} -- "questID:index" -> points; spawns never move. A miss isn't kept: a source can finish
+-- loading later.
+
+--- Where an objective's mobs spawn, from the first source that knows, as world points (see QP.Sources).
+function QP.SpawnPoints(questID, index)
+    local key = questID .. ":" .. index
+    if spawnCache[key] then
+        return spawnCache[key]
+    end
+    for _, source in ipairs(QP.Sources) do
+        if source.spawns then
+            local ok, points = pcall(source.spawns, questID, index)
+            if ok and type(points) == "table" and #points > 0 then
+                spawnCache[key] = points
+                return points
+            end
+        end
+    end
+    return nil
+end
+
+--- The nearest point on the player's continent, and its distance in yards; nil when none is.
+function QP.Nearest(points, continent, px, py)
+    local best, bestSq
+    for _, p in ipairs(points) do
+        if p.continent == continent then
+            local dx, dy = p.x - px, p.y - py
+            local sq = dx * dx + dy * dy
+            if not bestSq or sq < bestSq then
+                best, bestSq = p, sq
+            end
+        end
+    end
+    return best, best and math.sqrt(bestSq) or nil
+end
+
+--- The turn from where the player faces to the point, in radians counterclockwise, for Texture:SetRotation on
+-- an arrow drawn pointing up. facing is GetPlayerFacing's: 0 is north, growing counterclockwise; world x grows
+-- north and y west, so atan2(west, north) is the point's bearing on the same scale.
+function QP.Bearing(px, py, tx, ty, facing)
+    local angle = math.atan2(ty - py, tx - px) - facing
+    local turn = 2 * math.pi
+    return (angle + math.pi) % turn - math.pi
 end
 
 --- The quests in the log worth hunting, in log order:

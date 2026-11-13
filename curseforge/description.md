@@ -19,6 +19,10 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 A bouncing arrow sits over the nameplate of the mob the next press will ping.
 
+## Guide arrow
+
+When no mob you still need is in view, an arrow near the top of the screen points at the nearest place one spawns, with its name and distance. Walk where it points. Once a needed mob's nameplate comes up, the bouncing arrow over it takes over. The guide arrow needs Polestar or Questie, since their quest databases know where mobs spawn. It hides in instances.
+
 ## Mobs it finds
 
 QuestPing reads your quest log and hunts every kill objective you have not finished, such as "3/10 Skullsplitter Mystic slain". New quests count as soon as you take them.
@@ -27,9 +31,9 @@ A mob counts as near when its enemy nameplate shows, which the game does up to 4
 
 ## Integrations
 
-- Polestar: if you use Polestar, QuestPing reads its quest database. That adds the mobs that drop quest items, such as "2/6 Troll Tusk", and the mobs that count toward a kill line with a group name, such as "Gnolls slain". You can turn this off in the settings.
+- Polestar: if you use Polestar, QuestPing reads its quest database. That adds the mobs that drop quest items, such as "2/6 Troll Tusk", and the mobs that count toward a kill line with a group name, such as "Gnolls slain". It also gives the guide arrow its spawn places.
+- Questie: if you use Questie, QuestPing reads its database the same way. With both installed, Polestar is asked first.
 - Minimap: QuestPing shows in the game's minimap addon list and has its own minimap button. The button uses LibDBIcon, so minimap button collectors pick it up.
-- Questie: support is planned.
 
 ## Hunt window
 
@@ -41,8 +45,9 @@ The settings are in Options > AddOns > QuestPing. You can:
 
 - turn party chat on or off
 - pick the raid icon
-- turn the arrow on or off
-- turn the Polestar database on or off
+- turn the nameplate arrow on or off
+- turn the guide arrow on or off
+- turn the quest databases on or off
 - turn enemy nameplates on or off
 - show or hide the minimap button
 
@@ -57,4 +62,4 @@ To keep the button on an action bar, make a macro with `/click QuestPingButton`.
 
 - The game does not let addons change the button during combat. In a fight, presses work through the mobs that were near when the fight started. New mobs join when it ends.
 - The button acts when you release the key, so each press counts once.
-- QuestPing cannot point an arrow across the world. The game tells addons where a mob's nameplate is on screen, not where the mob stands.
+- The guide arrow points at spawn places from the quest database, not at a live mob. The game tells addons where a mob is only once its nameplate is on screen.
