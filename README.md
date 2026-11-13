@@ -18,12 +18,12 @@ Like Polestar's target button, a press **targets first**; the ping comes on the 
 see what you've got.
 
 - **No quest mob targeted, or yours is done with:** the press targets the next one by name (`/targetexact`,
-  like the old macro and Polestar's target button), trying the free ones in view first, then the ones that
-  spawn within 200 yards (nearest first, from Polestar's or Questie's database) and any whose spawns no
-  database knows. You can see their names well past the 45-yard nameplates, but the game tells addons nothing
-  about them until they're your target. A tapped or busy one in view doesn't hide a free one farther out: when
-  your target is one that isn't free, the press goes on to the next of its name, and once it comes back around,
-  to the other names. If it finds none, you keep the quest mob you had.
+  like the old macro and Polestar's target button), trying the free ones in view first, then every other mob
+  you need, nearest known spawn first (from Polestar's or Questie's database). `/targetexact` reaches any mob
+  the game has loaded around you, well past the 45-yard nameplates and behind trees, but the game tells addons
+  nothing about it until it's your target. A tapped or busy one in view doesn't hide a free one farther out:
+  when your target is one that isn't free, the press goes on to the next of its name, and once it comes back
+  around, to the other names. If it finds none, you keep the quest mob you had.
 - **Your target is a quest mob that's free** (not tapped, not in a fight, not pinged in the last 10 minutes):
   the press **marks** it with a raid icon and **pings** it Attack. A tapped or busy one is never marked or
   pinged, far ones included; the next press just moves on.
@@ -38,7 +38,7 @@ see what you've got.
   With a Range set, far mobs are out of it.
 - A **bouncing arrow** sits over the nameplate of the mob you pinged, while it's your target, and a **quest
   icon** sits beside every needed mob nobody has (not tapped, not in a fight).
-- The ping button shows, dimmed, while a mob you need spawns within 200 yards, before any nameplate is up, like
+- The ping button shows, dimmed, while a mob you need spawns within 300 yards, before any nameplate is up, like
   Polestar's target button. Without a quest database it shows for mobs in view; the key works either way.
 
 ## Spawn guide arrow

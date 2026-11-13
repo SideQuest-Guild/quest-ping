@@ -14,7 +14,7 @@ It replaces this macro, which you would otherwise edit for every quest:
 
 Like Polestar's target button, a press targets first. The ping comes on the next press, once QuestPing can see what you've got.
 
-- If you have no quest mob targeted, or you're done with yours, a press targets the next one by name, like Polestar's target button. It tries the free ones in view first, then the ones that spawn within 200 yards, nearest first. You can see a mob's name well past the 45-yard nameplates, but the game tells addons nothing about it until it's your target. A tapped mob in view doesn't hide a free one farther out: the next press goes on to the next mob of that name, then to the other names. If it finds none, you keep the quest mob you had.
+- If you have no quest mob targeted, or you're done with yours, a press targets the next one by name, like Polestar's target button. It tries the free ones in view first, then every other mob you need, nearest known spawn first. This reaches any mob the game has loaded around you, well past the 45-yard nameplates and even behind trees, but the game tells addons nothing about a mob until it's your target. A tapped mob in view doesn't hide a free one farther out: the next press goes on to the next mob of that name, then to the other names. If it finds none, you keep the quest mob you had.
 - If your target is a quest mob that's free (not tapped, not in a fight, and not pinged in the last 10 minutes), a press marks it with a raid icon and pings it with the Attack ping. A tapped or busy mob is never marked or pinged, even a far one. The next press just moves on.
 - The game puts the ping in your group's chat ("Attack: Venture Co. Geologist"), so QuestPing adds no chat line of its own.
 - Raid icons go on in order: the skull first, then the cross, then the square and so on for each other mob. QuestPing skips icons already in use and never takes an icon off a mob. In a raid, only the leader and assistants can mark.
@@ -61,7 +61,7 @@ The settings are in Options > AddOns > QuestPing. You can:
 
 ## Setup
 
-1. Click the ping button, or bind "Target, then ping, the next quest mob" in Options > AddOns > QuestPing. The button shows up, dimmed, as soon as a mob you need spawns within 200 yards, and lights up once one is in view. It shows its key in the corner and the next mob's name beside it. Shift-drag moves it.
+1. Click the ping button, or bind "Target, then ping, the next quest mob" in Options > AddOns > QuestPing. The button shows up, dimmed, as soon as a mob you need spawns within 300 yards, and lights up once one is in view. It shows its key in the corner and the next mob's name beside it. Shift-drag moves it.
 2. Turn on enemy nameplates if they are off.
 
 To keep the button on an action bar, make a macro with `/click QuestPingButton`.
