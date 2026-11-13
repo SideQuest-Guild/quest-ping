@@ -216,18 +216,19 @@ test("Questie's database names the mobs by the quest log's objective index, and 
     Questie, QuestieLoader = nil, nil
 end)
 
-test("far names: spawns within reach, nearest first; names with no known spawns after them", function()
+test("far names: every needed mob, nearest known spawn first, then names with no known spawns", function()
     local hunt = {
-        { questID = 1, objectives = { { index = 1, names = { "Skullsplitter Mystic" } } } }, -- spawns at y 600, 300
         { questID = 99, objectives = { { index = 1, names = { "Somewhere Mob" } } } }, -- no known spawns
+        { questID = 1, objectives = { { index = 1, names = { "Skullsplitter Mystic" } } } }, -- spawns at y 600, 300
     }
     local far, close = QP.FarNames(hunt, 1, 500, 500, 200)
     eq(table.concat(far, ","), "Skullsplitter Mystic,Somewhere Mob")
     eq(close, true, "a known spawn 100 yards off")
     far, close = QP.FarNames(hunt, 1, 500, 1000, 200)
-    eq(table.concat(far, ","), "Somewhere Mob", "known spawns, none within reach: left out")
-    eq(close, false)
-    eq(#QP.FarNames(hunt, 2, 500, 500, 200), 1, "another continent")
+    eq(table.concat(far, ","), "Skullsplitter Mystic,Somewhere Mob",
+        "spawns 400 yards off: still tried, like Polestar's button (/targetexact reaches past what you can see)")
+    eq(close, false, "but not near enough to bring the button up")
+    eq(#QP.FarNames(hunt, 2, 500, 500, 200), 2, "another continent: still tried, last")
 end)
 
 test("the nearest spawn is on the player's continent, and the bearing turns the right way", function()
@@ -710,7 +711,7 @@ test("the button shows, dimmed, while a needed mob spawns within reach, nameplat
     world.quests = { { id = 1, objectives = { kill(MYSTIC, 0, 10) } } } -- spawns 100 and 200 yards off
     fire("QUEST_LOG_UPDATE")
     eq(b.shown, true, "like Polestar's target button: there to click before any nameplate is up")
-    world.py = 0.9 -- 300 yards from the nearest spawn
+    world.py = 0.95 -- 350 yards from the nearest spawn
     fire("QUEST_LOG_UPDATE")
     eq(b.shown, false, "nowhere near")
     world.py = nil

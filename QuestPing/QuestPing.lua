@@ -208,7 +208,7 @@ local function applySteps(steps, near)
     end
 end
 
-local FAR_REACH = 200 -- yards: a quest mob spawning this close may be in sight past its nameplate
+local FAR_REACH = 300 -- yards: with a needed mob spawning this close, the button is up before any nameplate
 -- Targeting presses through mobs of one name that aren't free: the name, the mobs (GUIDs) it has reached, and
 -- whether it has come back around to one, so the next press tries the other names first (QP.Steps' moveOn).
 local cycle = { name = nil, seen = {}, moveOn = false }
@@ -275,7 +275,7 @@ local function refresh()
     end
 
     sig = (targetName or "") .. (onQuestMob and "T|" or "|") .. table.concat(sig, ",") .. "|"
-        .. table.concat(far, ",") .. "|" .. tostring(cycle.moveOn)
+        .. table.concat(far, ",") .. "|" .. tostring(cycle.moveOn) .. tostring(close)
     if sig == appliedSig or InCombatLockdown() then
         return
     end

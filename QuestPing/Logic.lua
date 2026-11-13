@@ -365,12 +365,12 @@ function QP.Candidates(wanted, plates, range, needed)
     return units, names
 end
 
---- The names a press may look for beyond the nameplates, nearest first, and whether any of them is known to
--- spawn near. /targetexact reaches as far as you can see a mob, but nothing tells QuestPing whether it's tapped
--- or fighting until it's targeted. An unfinished objective whose mobs spawn somewhere a source knows gives the
--- names of its spawns within reach yards of the player (continent, px, py, world yards); one with no known
--- spawns gives its names after those, since they may be anywhere. Names with a nameplate up count too: a
--- tapped one in view doesn't mean a free one isn't farther out.
+--- Every name a press may look for beyond the nameplates, nearest known spawn first, and whether any of them
+-- spawns within reach yards of the player (continent, px, py, world yards). /targetexact reaches every mob
+-- the game has loaded around you, past the nameplates and out of sight, as Polestar's target button does; but
+-- nothing tells QuestPing whether it's tapped or fighting until it's targeted. Names whose spawns no source
+-- knows, or are on another continent, come last. Names with a nameplate up count too: a tapped one in view
+-- doesn't mean a free one isn't farther out.
 function QP.FarNames(hunt, continent, px, py, reach)
     local best, order = {}, {}
     local close = false
@@ -386,22 +386,16 @@ function QP.FarNames(hunt, continent, px, py, reach)
     for _, quest in ipairs(hunt) do
         for _, o in ipairs(quest.objectives) do
             if not o.finished then
-                local points = QP.SpawnPoints(quest.questID, o.index)
-                if points and continent then
-                    for _, p in ipairs(points) do
-                        if p.continent == continent and p.name then
-                            local dx, dy = p.x - px, p.y - py
-                            local sq = dx * dx + dy * dy
-                            if sq <= reachSq then
-                                close = true
-                                add(p.name, math.sqrt(sq))
-                            end
-                        end
+                for _, p in ipairs(QP.SpawnPoints(quest.questID, o.index) or {}) do
+                    if continent and p.continent == continent and p.name then
+                        local dx, dy = p.x - px, p.y - py
+                        local sq = dx * dx + dy * dy
+                        close = close or sq <= reachSq
+                        add(p.name, math.sqrt(sq))
                     end
-                elseif not points then
-                    for _, name in ipairs(o.names) do
-                        add(name, math.huge)
-                    end
+                end
+                for _, name in ipairs(o.names) do
+                    add(name, math.huge)
                 end
             end
         end
