@@ -224,6 +224,42 @@ test("Questie's database names the mobs by the quest log's objective index, and 
     Questie, QuestieLoader = nil, nil
 end)
 
+test("a mob no quest database knows gets its spawns from Polestar's Codex by name, tried first nearby", function()
+    reset()
+    local loads = 0
+    local blob = "\2roosting duskbat\001262037,,,16\n\2foreman cozzle\00199,,,14\n"
+    Polestar = {
+        Search = { Fold = function(s) return " " .. s:lower() end },
+        Compat = { MapToWorld = function(map, x, y) return map == 1 and 1 or nil, x * 10, y * 10 end },
+        Codex = {
+            IsLoaded = function() return loads > 0 end,
+            Load = function() loads = loads + 1 return true end,
+            Index = function(kind) return kind == "npc" and blob or nil end,
+            Npc = function(id)
+                return id == 262037 and { spawns = { { map = 1, x = 61.5, y = 84.6 } } }
+                    or id == 99 and { spawns = { { map = 1, x = 10, y = 10 } } } or nil
+            end,
+        },
+    }
+    world.combat = true
+    eq(QP.SpawnPoints(95603, 1, { "Roosting Duskbat" }), nil, "the Codex isn't loaded in a fight")
+    world.combat = false
+    local points = QP.SpawnPoints(95603, 1, { "Roosting Duskbat" })
+    eq(loads, 1, "loaded once out of combat")
+    eq(#points, 1)
+    eq(points[1].name, "Roosting Duskbat")
+    eq(points[1].x, 615)
+    eq(QP.SpawnPoints(95604, 1, { "Nobody Here" }), nil, "a name the Codex lacks")
+    local hunt = {
+        { questID = 95605, objectives = { { index = 1, names = { "Foreman Cozzle" } } } },
+        { questID = 95603, objectives = { { index = 1, names = { "Roosting Duskbat" } } } },
+    }
+    local far, close = QP.FarNames(hunt, 1, 620, 840, 300)
+    eq(table.concat(far, ","), "Roosting Duskbat,Foreman Cozzle", "the mob spawning here comes first")
+    eq(close, true, "so the button comes up")
+    Polestar = nil
+end)
+
 test("far names: every needed mob, nearest known spawn first, then names with no known spawns", function()
     local hunt = {
         { questID = 99, objectives = { { index = 1, names = { "Somewhere Mob" } } } }, -- no known spawns

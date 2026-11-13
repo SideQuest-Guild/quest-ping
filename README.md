@@ -19,9 +19,10 @@ see what you've got.
 
 - **No quest mob targeted, or yours is done with:** the press targets the next one by name (`/targetexact`,
   like the old macro and Polestar's target button), trying the free ones in view first, then every other mob
-  you need, nearest known spawn first (from Polestar's or Questie's database). `/targetexact` reaches any mob
-  the game has loaded around you, well past the 45-yard nameplates and behind trees, but the game tells addons
-  nothing about it until it's your target. A tapped, busy or hurt one in view doesn't hide a free one farther out:
+  you need, nearest known spawn first (from Polestar's or Questie's database, or for Forever's own quests,
+  which neither has, Polestar's Codex by the mob's name). `/targetexact` reaches any mob the game has loaded
+  around you, well past the 45-yard nameplates and behind trees, but the game tells addons nothing about it
+  until it's your target. A tapped, busy or hurt one in view doesn't hide a free one farther out:
   when your target is one that isn't free, the press goes on to the next of its name, and once it comes back
   around, to the other names. If it finds none, you keep the quest mob you had.
 - **Your target is a quest mob that's free** (not tapped, not in a fight, not hurt, not pinged in the last 10
@@ -45,9 +46,9 @@ see what you've got.
 
 Off unless you turn it on in the settings, since it can only guess. When no mob you still need is in view, an
 arrow near the top of the screen points at the nearest place one spawns, with its name and distance. The spawn
-places come from Polestar's or Questie's quest database, so it needs one of them, and a spawn may be empty. A
-spawn you reach with none of its mobs alive in view is skipped for 5 minutes while it respawns. It hides in
-instances. Shift-drag moves it.
+places come from Polestar's or Questie's quest database, or Polestar's Codex, so it needs one of them, and a
+spawn may be empty. A spawn you reach with none of its mobs alive in view is skipped for 5 minutes while it
+respawns. It hides in instances. Shift-drag moves it.
 
 ## Which mobs
 

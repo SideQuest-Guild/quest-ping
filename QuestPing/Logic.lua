@@ -73,11 +73,11 @@ function QP.ObjectiveName(text)
     return name ~= "" and name or nil
 end
 
---- Quest databases that know which mobs an objective is about (Sources.lua registers them). Each is
--- { name, label, mobs = function(questID, index) -> { names } or nil, status = function() -> text, and
--- optionally spawns = function(questID, index) -> { { name, continent, x, y } } or nil }, where x and y are
--- world yards as C_Map.GetWorldPosFromMapPos gives them (x grows north, y grows west). The first source that
--- answers for an objective wins.
+--- Quest databases that know which mobs an objective is about and where they spawn (Sources.lua registers them).
+-- Each is { name, label, status = function() -> text, and optionally mobs = function(questID, index) -> { names }
+-- or nil and spawns = function(questID, index, names) -> { { name, continent, x, y } } or nil }, where names are
+-- the objective's mobs as QP.Hunt found them, and x and y are world yards as C_Map.GetWorldPosFromMapPos gives
+-- them (x grows north, y grows west). The first source that answers for an objective wins.
 QP.Sources = {}
 
 function QP.AddSource(source)
@@ -86,9 +86,11 @@ end
 
 local function fromSources(questID, index)
     for _, source in ipairs(QP.Sources) do
-        local ok, names = pcall(source.mobs, questID, index)
-        if ok and type(names) == "table" and #names > 0 then
-            return names, source.label
+        if source.mobs then
+            local ok, names = pcall(source.mobs, questID, index)
+            if ok and type(names) == "table" and #names > 0 then
+                return names, source.label
+            end
         end
     end
     return nil
@@ -97,15 +99,16 @@ end
 local spawnCache = {} -- "questID:index" -> points; spawns never move. A miss isn't kept: a source can finish
 -- loading later.
 
---- Where an objective's mobs spawn, from the first source that knows, as world points (see QP.Sources).
-function QP.SpawnPoints(questID, index)
+--- Where an objective's mobs spawn, from the first source that knows, as world points (see QP.Sources). names
+-- are the objective's mobs (its QP.Hunt entry's names), for sources that look spawns up by name.
+function QP.SpawnPoints(questID, index, names)
     local key = questID .. ":" .. index
     if spawnCache[key] then
         return spawnCache[key]
     end
     for _, source in ipairs(QP.Sources) do
         if source.spawns then
-            local ok, points = pcall(source.spawns, questID, index)
+            local ok, points = pcall(source.spawns, questID, index, names)
             if ok and type(points) == "table" and #points > 0 then
                 spawnCache[key] = points
                 return points
@@ -388,7 +391,7 @@ function QP.FarNames(hunt, continent, px, py, reach, groupOn)
     for _, quest in ipairs(hunt) do
         for _, o in ipairs(quest.objectives) do
             if not o.finished or (groupOn and groupOn(quest.questID)) then
-                for _, p in ipairs(QP.SpawnPoints(quest.questID, o.index) or {}) do
+                for _, p in ipairs(QP.SpawnPoints(quest.questID, o.index, o.names) or {}) do
                     if continent and p.continent == continent and p.name then
                         local dx, dy = p.x - px, p.y - py
                         local sq = dx * dx + dy * dy

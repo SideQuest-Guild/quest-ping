@@ -50,7 +50,7 @@ local function pick(continent, px, py)
     for _, quest in ipairs(ns.state.hunt) do
         for _, o in ipairs(quest.objectives) do
             if not o.finished then
-                local points = QP.SpawnPoints(quest.questID, o.index)
+                local points = QP.SpawnPoints(quest.questID, o.index, o.names)
                 if points then
                     QP.MarkSeen(points, continent, px, py, SEEN_RANGE, seen, now)
                     local p, dist = QP.Nearest(points, continent, px, py, seen)

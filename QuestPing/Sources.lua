@@ -1,7 +1,8 @@
 -- QuestPing/Sources.lua
 -- Quest databases QuestPing reads to know which mobs an objective is about and where they spawn (Logic.lua's
 -- QP.Sources). Each is optional: without them QuestPing still hunts the mobs the quest log names, and the guide
--- arrow has nowhere to point. Polestar comes first, then Questie; the first that answers wins.
+-- arrow has nowhere to point. Polestar comes first, then Questie, then Polestar's Codex for spawns by name; the
+-- first that answers wins.
 
 local _, ns = ...
 local QP = ns.QP
@@ -191,6 +192,99 @@ QP.AddSource({
             return nil
         end
         return questie() and "Questie database: on" or "Questie database: not ready"
+    end,
+})
+
+---------------------------------------------------------------------------
+-- Polestar's Codex (the load-on-demand Polestar_Codex): spawns by mob name
+---------------------------------------------------------------------------
+
+-- The quest databases above don't have Forever's own quests (Bats in the Belfry), so their mobs had no known
+-- spawn: they sorted last among the names a press tries, fell off the end of its macro, and never brought the
+-- button up. The Codex has every NPC with its spawns, Forever's too. Codex.Index(kind) is its name index, lines
+-- "\2<folded name>\1<id>,...", folded as Polestar.Search.Fold minus its leading space; Codex.Npc(id).spawns
+-- are { map, x, y, f } like the quest database's. The index is in English, so on another client's language a
+-- name only matches where it's spelled the same.
+local INDEX_KINDS = { "npc", "rare" }
+local codexTried = false -- Codex.Load is tried once (out of combat): a missing pack stays missing
+local codexIds = {} -- mob name -> { npc id, ... } (empty when the Codex has no such name)
+
+local function codex()
+    local P = type(Polestar) == "table" and Polestar or nil
+    local X = P and P.Codex
+    local S = P and P.Search
+    if type(X) ~= "table" or not (X.IsLoaded and X.Index and X.Npc and S and S.Fold and P.Compat
+        and P.Compat.MapToWorld) then
+        return nil
+    end
+    if not X.IsLoaded() then
+        -- Polestar loads it for its own lookups; load it here too, unless its Lookup is switched off.
+        if codexTried or not X.Load or InCombatLockdown() or (P.Get and P.Get("lookup.enabled") == false) then
+            return nil
+        end
+        codexTried = true
+        local ok, loaded = pcall(X.Load)
+        if not (ok and loaded) then
+            return nil
+        end
+    end
+    return X, S, P.Compat
+end
+
+local function codexNpcIds(X, S, name)
+    if codexIds[name] then
+        return codexIds[name]
+    end
+    local ids, seen = {}, {}
+    local needle = "\2" .. S.Fold(name):sub(2) .. "\1"
+    for _, kind in ipairs(INDEX_KINDS) do
+        local blob = X.Index(kind)
+        local at = 1
+        while type(blob) == "string" do
+            local _, e = blob:find(needle, at, true)
+            if not e then
+                break
+            end
+            local id = tonumber(blob:match("^(%d+)", e + 1))
+            if id and not seen[id] then
+                seen[id] = true
+                ids[#ids + 1] = id
+            end
+            at = e + 1
+        end
+    end
+    codexIds[name] = ids
+    return ids
+end
+
+QP.AddSource({
+    name = "codex",
+    label = "Polestar codex",
+    spawns = function(_, _, names)
+        local X, S, C = codex()
+        if not X then
+            return nil
+        end
+        local points = {}
+        for _, name in ipairs(names or {}) do
+            for _, id in ipairs(codexNpcIds(X, S, name)) do
+                local npc = X.Npc(id)
+                for _, s in ipairs(npc and npc.spawns or {}) do
+                    local continent, wx, wy = C.MapToWorld(s.map, s.x, s.y, s.f)
+                    if continent then
+                        points[#points + 1] = { name = name, continent = continent, x = wx, y = wy }
+                    end
+                end
+            end
+        end
+        return points
+    end,
+    status = function()
+        local X = type(Polestar) == "table" and Polestar.Codex
+        if type(X) ~= "table" or not X.IsLoaded then
+            return nil
+        end
+        return X.IsLoaded() and "Polestar codex: on" or "Polestar codex: not loaded"
     end,
 })
 
