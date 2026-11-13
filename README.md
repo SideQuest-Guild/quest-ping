@@ -59,7 +59,7 @@ instances. Shift-drag moves it.
   Tumbled Crystal"), and QuestPing reads that, so it works with no addon on their side and covers drop items
   too. Far mobs count as well: while someone in your group is on the quest, a press still looks for its mobs
   by name after you're done, and pings the one it finds once its tooltip shows someone short.
-  too. QuestPing users in the group also share what they still need in hidden addon messages (party or raid
+  QuestPing users in the group also share what they still need in hidden addon messages (party or raid
   only), and Polestar's party sync counts when it's on; those show in the hunt window ("For Ana"). "Hunt for
   your party too" in the settings turns all of this off.
 - **Near:** the mob has an enemy nameplate up, which the game shows out to 45 yards. Enemy nameplates are off by
