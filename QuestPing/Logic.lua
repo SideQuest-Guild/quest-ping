@@ -471,7 +471,7 @@ local function targetStep(chain, targetName)
         lines[#lines + 1], size = line, size + #line
     end
     local text = head .. table.concat(lines) .. tail
-    return { text = tail ~= "" and text or text:sub(1, -2) }
+    return { text = tail ~= "" and text or text:sub(1, -2), desc = "Find " .. chain[1] }
 end
 
 function QP.Steps(units, quiet, marks, names, far, onTarget, targetName, moveOn)
@@ -481,7 +481,7 @@ function QP.Steps(units, quiet, marks, names, far, onTarget, targetName, moveOn)
     if target and not quiet[target] then
         local mark = marks[target]
         steps[1] = { text = (mark and ("/tm [@target,harm,nodead] ~" .. mark .. "\n") or "") .. PING_TARGET,
-            ping = target }
+            ping = target, desc = "Ping " .. (names[1] or "") }
     end
     local chain, listed = {}, {}
     local function add(name)
@@ -513,12 +513,48 @@ function QP.Steps(units, quiet, marks, names, far, onTarget, targetName, moveOn)
         -- Nothing new to take: keep a live target, or take back the first mob in view.
         for i in ipairs(units) do
             if usable(names[i]) then
-                steps[1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. names[i] }
+                steps[1] = { text = "/cleartarget [dead]\n" .. KEEP_TARGET .. "/targetexact [noexists] " .. names[i],
+                    desc = names[i] }
                 break
             end
         end
     end
-    return #steps > 0 and steps or nil
+    return #steps > 0 and steps or nil, chain
+end
+
+--- The fight macros: what a press runs in a fight while you have a live hostile target, where the steps above
+-- stop. Your mob becomes your focus, the press targets another quest mob by name, pings it and targets your
+-- mob again (/target focus), so you're never pulled off it. Each press runs the next macro, wrapping around.
+-- Built before the fight (at the pull), since the game freezes the button's macros for its whole length:
+-- fighting is your target's name then, pack how many other free mobs of that name are in view, and names the
+-- ones to look for (QP.Steps' second return).
+--
+-- Each macro looks up one name, from your mob: /targetexact on another name takes its nearest mob, and on your
+-- mob's own name moves on to the next of that name, so the first macros go 1, 2, 3 further down its pack (only
+-- as many as are in view: with none, it would come back around to yours). Two lookups in one macro could land
+-- on your mob: the second would start from the first's find. Nothing is known about a mob's tap or fight in
+-- there, so it's pinged blind; and with nothing found, the ping lands on your own mob. Nil for nothing to
+-- look up.
+local FIGHT_HEAD = "/clearfocus\n/focus\n"
+local FIGHT_TAIL = "/cleartarget [dead]\n" .. PING_TARGET .. "\n/target focus\n/clearfocus"
+QP.FIGHT_PACK = 3 -- how far down your mob's own pack the fight macros reach
+QP.FIGHT_NAMES = 5 -- other names, one macro each
+
+function QP.FightSteps(fighting, pack, names)
+    local fights = {}
+    if usable(fighting) then
+        for k = 1, math.min(pack or 0, QP.FIGHT_PACK) do
+            fights[#fights + 1] = FIGHT_HEAD .. ("/targetexact " .. fighting .. "\n"):rep(k) .. FIGHT_TAIL
+        end
+    end
+    local others = 0
+    for _, name in ipairs(names or {}) do
+        if name ~= fighting and usable(name) and others < QP.FIGHT_NAMES then
+            others = others + 1
+            fights[#fights + 1] = FIGHT_HEAD .. "/targetexact " .. name .. "\n" .. FIGHT_TAIL
+        end
+    end
+    return #fights > 0 and fights or nil
 end
 
 QP.MARK_ORDER = { 8, 7, 6, 5, 4, 3, 2, 1 } -- skull, cross, square, moon, triangle, diamond, circle, star

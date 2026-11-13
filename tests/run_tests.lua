@@ -57,6 +57,12 @@ end
 function InCombatLockdown() return world.combat end
 function GetTime() return world.now end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+-- Only the one condition QuestPing asks: in a fight, with a live hostile target.
+function SecureCmdOptionParse(msg)
+    assert(msg == "[combat,harm,nodead]", msg)
+    local t = U("target")
+    return (world.combat and t and not t.dead and not t.friendly) and "" or nil
+end
 function IsInRaid() return world.group == "raid" end
 function IsInGroup() return world.group ~= nil end
 function IsShiftKeyDown() return world.shift end
@@ -510,6 +516,7 @@ local function targetExact(name, target)
 end
 
 local function runMacro(text)
+    local pinged
     for line in text:gmatch("[^\n]+") do
         local target = currentTarget()
         if line == "/cleartarget [dead]" then
@@ -518,6 +525,12 @@ local function runMacro(text)
             setTarget(nil)
         elseif line == "/targetlasttarget [noexists]" then
             if not target and world.lastTarget and world.units[world.lastTarget] then setTarget(world.lastTarget) end
+        elseif line == "/clearfocus" then
+            world.focus = nil
+        elseif line == "/focus" then
+            world.focus = target
+        elseif line == "/target focus" then
+            if world.focus and world.units[world.focus] then setTarget(world.focus) end
         elseif line == "/stopmacro [combat,harm,nodead]" then
             if world.combat and liveHostile(target) then return nil end
         elseif line:match("^/targetexact ") then
@@ -538,9 +551,12 @@ local function runMacro(text)
                 fire("RAID_TARGET_UPDATE")
             end
         elseif line == "/ping [@target,harm,nodead] 1" then
-            if liveHostile(target) then return target end
+            if liveHostile(target) then pinged = target end
+        else
+            error("the simulator doesn't know this macro line: " .. line)
         end
     end
+    return pinged
 end
 
 local function press()
@@ -609,25 +625,30 @@ test("several mobs of one name: each target press takes the next of that name", 
     eq(press(), nil)
 end)
 
-test("in combat a press only targets and never pulls you off a live target; pings wait for the fight to end",
-    function()
+test("in a fight on a live mob, a press pings another quest mob and targets yours again", function()
     clearPlates()
     world.group = "raid"
     near("nameplate9", { name = MYSTIC })
     near("nameplate10", { name = THROWER })
+    near("nameplate11", { name = MYSTIC })
+    eq(press(), nil, "out of combat: target first")
+    eq(currentTarget(), "nameplate9")
+    fire("PLAYER_REGEN_DISABLED")
     world.combat = true
-    eq(press(), nil, "no live target yet: it targets")
+    fire("RAID_TARGET_UPDATE") -- any refresh (the ticker's, in game)
+    eq(b.Label.text, "Ping another, then back")
+    eq(press(), "nameplate11", "the next of your mob's own name")
+    eq(currentTarget(), "nameplate9", "and back on your mob")
+    eq(press(), "nameplate10", "then the other names")
     eq(currentTarget(), "nameplate9")
-    eq(press(), nil, "on a live target now: the press stops there")
-    eq(currentTarget(), "nameplate9")
-    eq(world.units.nameplate9.icon, nil)
+    local again = press()
+    eq(currentTarget(), "nameplate9", "whatever it finds, you end on your mob")
+    assert(again ~= nil)
 
+    world.units.nameplate9.dead = true
+    eq(press(), nil, "your mob died: no live target, so a press targets as out of combat")
     world.combat = false
     fire("PLAYER_REGEN_ENABLED")
-    eq(press(), "nameplate9", "after the fight your target gets its ping")
-    eq(press(), nil)
-    eq(press(), "nameplate10")
-    eq(press(), nil, "both pinged")
 end)
 
 test("pings wear off, and a mob that leaves and comes back stays pinged", function()

@@ -19,13 +19,24 @@ local readable = QP.Readable
 local TICK = 0.25 -- deaths, taps and pulls change without an event worth trusting; re-read the plates this often
 local PINGED_FOR = 600 -- seconds a pinged mob stays pinged
 
--- Runs in the restricted environment before every click: put this press's step in macrotext, then move on to
--- the next unless this is the last one, which repeats.
+-- Runs in the restricted environment before every click. In a fight with a live hostile target, put the next
+-- fight macro in macrotext (QP.FightSteps: ping another mob and come back), wrapping around. Otherwise put
+-- this press's step there and move on to the next, unless this is the last one, which repeats.
+local FIGHTING = "[combat,harm,nodead]"
 local NEXT_STEP = [[
-    local i = self:GetAttribute("qp-step") or 1
-    self:SetAttribute("macrotext", self:GetAttribute("qp-macro" .. i))
-    if self:GetAttribute("qp-macro" .. (i + 1)) then
-        self:SetAttribute("qp-step", i + 1)
+    if self:GetAttribute("qp-fight1") and SecureCmdOptionParse("[combat,harm,nodead]") then
+        local k = self:GetAttribute("qp-fstep") or 1
+        if not self:GetAttribute("qp-fight" .. k) then
+            k = 1
+        end
+        self:SetAttribute("macrotext", self:GetAttribute("qp-fight" .. k))
+        self:SetAttribute("qp-fstep", k + 1)
+    else
+        local i = self:GetAttribute("qp-step") or 1
+        self:SetAttribute("macrotext", self:GetAttribute("qp-macro" .. i))
+        if self:GetAttribute("qp-macro" .. (i + 1)) then
+            self:SetAttribute("qp-step", i + 1)
+        end
     end
 ]]
 
@@ -35,6 +46,8 @@ local plates = {} -- nameplate unit tokens in the order they came into view
 local hunt, wanted, wantedDirty, ticks = {}, {}, true, 0
 local pingedAt = {} -- GUID (or "plate:<unit>" when the GUID is secret) -> GetTime() of its ping
 local pingByText = {} -- step macro -> the unit it pings
+local stepDesc = {} -- step number -> what it does, for the button's label
+local fightCount = 0
 local stepCount = 0
 local candidates = {} -- the units the steps were last worked out for
 
@@ -180,22 +193,32 @@ local function markFree(units)
     end
 end
 
-local function applySteps(steps, near)
+local function applySteps(steps, near, fights)
     for i = 1, stepCount do
         button:SetAttribute("qp-macro" .. i, nil)
+    end
+    for i = 1, fightCount do
+        button:SetAttribute("qp-fight" .. i, nil)
     end
     for text in pairs(pingByText) do
         pingByText[text] = nil
     end
+    wipe(stepDesc)
     stepCount = steps and #steps or 0
     for i = 1, stepCount do
         button:SetAttribute("qp-macro" .. i, steps[i].text)
+        stepDesc[i] = steps[i].desc
         if steps[i].ping then
             pingByText[steps[i].text] = steps[i].ping
         end
     end
+    fightCount = fights and #fights or 0
+    for i = 1, fightCount do
+        button:SetAttribute("qp-fight" .. i, fights[i])
+    end
     button:SetAttribute("qp-step", 1)
-    button:SetAttribute("type", steps and "macro" or nil)
+    button:SetAttribute("qp-fstep", 1)
+    button:SetAttribute("type", (steps or fights) and "macro" or nil)
     button:SetAttribute("macrotext", steps and steps[1].text or nil)
     -- "near" (default): only while a mob is in view (the key also reaches far ones). "always": also idle,
     -- dimmed, so you can find, move and click it. "never": key binding only (a hidden button still takes its
@@ -293,7 +316,7 @@ local function refresh()
     if onQuestMob and pingedAt[pingKey(first)] then
         pressedFor = first
     end
-    button.Label:SetText(nextName or far[1] or names[1] or "")
+    local fallbackLabel = nextName or far[1] or names[1] or ""
     button.Count:SetText(#names > 1 and tostring(#names) or "")
     button.Icon:SetDesaturated(nextUnit == nil)
     button:SetAlpha(nextUnit and 1 or 0.5)
@@ -304,14 +327,31 @@ local function refresh()
         fn()
     end
 
-    sig = (targetName or "") .. (onQuestMob and "T|" or "|") .. table.concat(sig, ",") .. "|"
-        .. table.concat(far, ",") .. "|" .. tostring(cycle.moveOn) .. tostring(close)
-    if sig == appliedSig or InCombatLockdown() then
-        return
+    -- Your mob, for the fight macros: any live hostile target, quest mob or not; and how many other free mobs
+    -- of its name are in view.
+    local fighting = UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target")
+        and readable((UnitName("target"))) or nil
+    local pack = 0
+    for i, unit in ipairs(units) do
+        if names[i] == fighting and not quiet[unit] and not (onQuestMob and i == 1) then
+            pack = pack + 1
+        end
     end
-    applySteps(QP.Steps(units, quiet, raidMarks, names, far, onQuestMob, targetName, cycle.moveOn),
-        #units > 0 or close)
-    appliedSig = sig
+    sig = (targetName or "") .. "/" .. (fighting or "") .. pack .. (onQuestMob and "T|" or "|")
+        .. table.concat(sig, ",") .. "|" .. table.concat(far, ",") .. "|" .. tostring(cycle.moveOn) .. tostring(close)
+    if sig ~= appliedSig and not InCombatLockdown() then
+        local steps, chain = QP.Steps(units, quiet, raidMarks, names, far, onQuestMob, targetName, cycle.moveOn)
+        applySteps(steps, #units > 0 or close, QP.FightSteps(fighting, pack, chain))
+        appliedSig = sig
+    end
+    -- What the next press does: in a fight on a live mob, ping another and come back; else the next step.
+    local label
+    if fightCount > 0 and SecureCmdOptionParse(FIGHTING) then
+        label = "Ping another, then back"
+    else
+        label = stepDesc[button:GetAttribute("qp-step") or 1]
+    end
+    button.Label:SetText(label or fallbackLabel)
 end
 
 --- Re-read everything now and rewrite the steps: a setting changed (Options.lua) or the window opened.
@@ -330,13 +370,25 @@ local running = {} -- the step this press runs: its text, and whether it pings
 -- Before the click: read the step now, since targeting mid-macro rewrites the steps (PLAYER_TARGET_CHANGED).
 local function beforeClick(self)
     pressing = true
-    local text = self:GetAttribute("qp-macro" .. (self:GetAttribute("qp-step") or 1))
-    running.text, running.pings = text, text and pingByText[text] ~= nil
+    running.fight = fightCount > 0 and SecureCmdOptionParse(FIGHTING) and true or false
+    local text
+    if running.fight then
+        local k = self:GetAttribute("qp-fstep") or 1
+        text = self:GetAttribute("qp-fight" .. k) or self:GetAttribute("qp-fight1")
+    else
+        text = self:GetAttribute("qp-macro" .. (self:GetAttribute("qp-step") or 1))
+    end
+    running.text, running.pings = text, not running.fight and text and pingByText[text] ~= nil
 end
 
 local function afterClick()
     pressing = false
     presses, lastRan = presses + 1, running.text
+    if running.fight then
+        -- Pinged blind and back on your mob: nothing to note (the macros stay as they were at the pull).
+        refresh()
+        return
+    end
     if running.pings then
         refresh() -- the candidates as they are now: a far mob the press found counts as "target" only now
         for _, unit in ipairs(candidates) do
@@ -591,6 +643,10 @@ function handlers.UNIT_QUEST_LOG_CHANGED(unit)
     end
 end
 
+-- Fires just before the game locks the button for the fight: a last chance to write the fight macros for the
+-- mob you're on.
+handlers.PLAYER_REGEN_DISABLED = refresh
+
 function handlers.PLAYER_REGEN_ENABLED()
     if button then
         secure()
@@ -667,6 +723,14 @@ local function printStatus()
     if lastRan then
         say("last press ran: " .. lastRan:gsub("\n", " | "))
     end
+    local nextText
+    if fightCount > 0 and SecureCmdOptionParse(FIGHTING) then
+        nextText = button:GetAttribute("qp-fight" .. (button:GetAttribute("qp-fstep") or 1))
+            or button:GetAttribute("qp-fight1")
+    else
+        nextText = button:GetAttribute("qp-macro" .. (button:GetAttribute("qp-step") or 1))
+    end
+    say("next press runs: " .. (nextText and nextText:gsub("\n", " | ") or "nothing (no quest mob to look for)"))
     local function cvar(name)
         return C_CVar and C_CVar.GetCVar and tostring(C_CVar.GetCVar(name)) or "?"
     end

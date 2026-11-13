@@ -85,13 +85,22 @@ instances. Shift-drag moves it.
   `/questping options`): which raid icon a press marks with (or none), the nameplate arrow, the quest
   icons, the spawn guide arrow, the range, using quest databases, enemy nameplates, the ping button, the minimap
   button, and putting things back where they start.
-- `/questping status` prints what you're hunting and what's near in chat.
+- `/questping status` prints what you're hunting, what's near, and the exact macro the next press runs.
 
-## In combat
+## In a fight
 
-The game only lets an addon rewrite the button out of combat, and a press never pulls you off a live target in a
-fight. So in a fight a press targets the next mob only while you have no live target, and a mob you target
-mid-fight gets its ping once the fight ends (the next press then pings it, if it's still free).
+While you're in combat with a live hostile target, a press **pings another quest mob and puts you back on
+yours**: it makes your mob your focus, targets the next quest mob by name, pings it, and targets your focus
+again. Each press looks one further: first the other mobs of your mob's name in view, then the other quest
+mobs. The button's label reads "Ping another, then back".
+
+- The game freezes the button's macros for the whole fight, so QuestPing writes these at the pull and can't
+  tell in there whether a mob is tapped or fighting: they're pinged blind and not marked.
+- If the lookup finds nothing, the ping lands on your own mob.
+- It uses your focus, and clears it after.
+- Switching targets for a moment may clip an auto-attack swing or a cast.
+- With no live target in a fight (yours just died), a press targets the next mob as usual; it gets its ping
+  once you're on it.
 
 ## What no addon can do
 

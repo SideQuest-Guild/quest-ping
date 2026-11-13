@@ -69,6 +69,6 @@ To keep the button on an action bar, make a macro with `/click QuestPingButton`.
 ## Limits
 
 - Addons can't ping on their own. The game only targets and pings from a key press or a click.
-- The game does not let addons change the button during combat, and a press never pulls you off a live target. In a fight, a press targets the next mob only while you have no live target, and the ping waits until the fight ends.
+- In a fight on a live mob, a press pings another quest mob and puts you straight back on yours (through your focus, which it clears after). The game freezes the button for the whole fight, so these are written at the pull and pinged blind: a tapped mob can get one, and if nothing is found the ping lands on your own mob. The quick target switch may clip an auto-attack swing or a cast.
 - The button acts when you release the key, so each press counts once.
 - The game tells addons about an enemy only through its nameplate or your target. So no arrow can point at a far mob, and the spawn guide arrow points at spawn places from the quest database, not at a live mob.
